@@ -1,0 +1,107 @@
+{
+  "identifier" : "B8F7A234-5678-9ABC-DEF0-123456789ABC",
+  "nonRenewingSubscriptions" : [
+
+  ],
+  "products" : [
+    {
+      "displayPrice" : "249.99",
+      "familyShareable" : false,
+      "internalID" : "6543211990",
+      "localizations" : [
+        {
+          "description" : "Pay once, own OffLeaf for life.",
+          "displayName" : "Lifetime Premium",
+          "locale" : "en_US"
+        }
+      ],
+      "productID" : "com.offleaf.premium.lifetime.unlock",
+      "referenceName" : "Lifetime Premium",
+      "type" : "NonConsumable"
+    }
+  ],
+  "settings" : {
+    "_applicationInternalID" : "123456789",
+    "_developerTeamID" : "Y6HQQ535H7",
+    "_lastSynchronizedDate" : 735589890.54321
+  },
+  "subscriptionGroups" : [
+    {
+      "id" : "21234567",
+      "localizations" : [
+
+      ],
+      "name" : "Premium Access",
+      "subscriptions" : [
+        {
+          "adHocOffers" : [
+
+          ],
+          "codeOffers" : [
+
+          ],
+          "displayPrice" : "14.99",
+          "familyShareable" : false,
+          "groupNumber" : 1,
+          "internalID" : "6543210987",
+          "introductoryOffer" : {
+            "displayPrice" : "0",
+            "internalID" : "7654321098",
+            "numberOfPeriods" : 1,
+            "paymentMode" : "free",
+            "subscriptionPeriod" : "P3D",
+            "type" : "introductory"
+          },
+          "localizations" : [
+            {
+              "description" : "Flexible access. Cancel anytime.",
+              "displayName" : "Monthly Premium",
+              "locale" : "en_US"
+            }
+          ],
+          "productID" : "com.offleaf.premium.monthly",
+          "recurringSubscriptionPeriod" : "P1M",
+          "referenceName" : "Monthly Premium",
+          "subscriptionGroupID" : "21234567",
+          "type" : "RecurringSubscription"
+        },
+        {
+          "adHocOffers" : [
+
+          ],
+          "codeOffers" : [
+
+          ],
+          "displayPrice" : "69.99",
+          "familyShareable" : false,
+          "groupNumber" : 1,
+          "internalID" : "6543210988",
+          "introductoryOffer" : {
+            "displayPrice" : "0",
+            "internalID" : "7654321099",
+            "numberOfPeriods" : 1,
+            "paymentMode" : "free",
+            "subscriptionPeriod" : "P3D",
+            "type" : "introductory"
+          },
+          "localizations" : [
+            {
+          "description" : "Save 61%. Includes 3-day free trial.",
+              "displayName" : "Annual Premium",
+              "locale" : "en_US"
+            }
+          ],
+          "productID" : "com.offleaf.premium.annual",
+          "recurringSubscriptionPeriod" : "P1Y",
+          "referenceName" : "Annual Premium",
+          "subscriptionGroupID" : "21234567",
+          "type" : "RecurringSubscription"
+        }
+      ]
+    }
+  ],
+  "version" : {
+    "major" : 3,
+    "minor" : 0
+  }
+}

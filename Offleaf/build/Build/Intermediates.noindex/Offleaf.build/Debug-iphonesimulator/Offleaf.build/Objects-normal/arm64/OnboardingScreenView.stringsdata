@@ -1,0 +1,48 @@
+{
+  "source": "/Users/romirjain/Desktop/building projects/Offleaf/Offleaf/Offleaf/Views/OnboardingScreenView.swift",
+  "tables": {
+    "Localizable": [
+      {
+        "comment": "",
+        "key": "Skip",
+        "location": {
+          "startingColumn": 30,
+          "startingLine": 27
+        }
+      },
+      {
+        "comment": "",
+        "key": "OFFLEAF",
+        "location": {
+          "startingColumn": 26,
+          "startingLine": 50
+        }
+      },
+      {
+        "comment": "",
+        "key": "Turn a New Leaf",
+        "location": {
+          "startingColumn": 26,
+          "startingLine": 62
+        }
+      },
+      {
+        "comment": "",
+        "key": "Take back control and unlock your full potential. Take a self-assessment to personalize your plan",
+        "location": {
+          "startingColumn": 26,
+          "startingLine": 70
+        }
+      },
+      {
+        "comment": "",
+        "key": "Build My Plan",
+        "location": {
+          "startingColumn": 26,
+          "startingLine": 116
+        }
+      }
+    ]
+  },
+  "version": 1
+}
