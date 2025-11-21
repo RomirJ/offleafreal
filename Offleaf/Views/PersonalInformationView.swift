@@ -65,7 +65,7 @@ struct PersonalInformationView: View {
                                     RoundedRectangle(cornerRadius: 12)
                                         .fill(Color.white.opacity(0.08))
                                 )
-                                .onChange(of: editedName) { _ in checkForChanges() }
+                                .onChange(of: editedName) { _, _ in checkForChanges() }
                         }
                         
                         // Quit Date
@@ -78,7 +78,7 @@ struct PersonalInformationView: View {
                                 .datePickerStyle(.compact)
                                 .labelsHidden()
                                 .colorScheme(.dark)
-                                .onChange(of: editedQuitDate) { checkForChanges() }
+                                .onChange(of: editedQuitDate) { _, _ in checkForChanges() }
                         }
                         
                         // Smoking Frequency
@@ -130,7 +130,7 @@ struct PersonalInformationView: View {
                                     .foregroundColor(.white)
                                     .tint(.white)
                                     .keyboardType(.decimalPad)
-                                    .onChange(of: editedSpending) { checkForChanges() }
+                                    .onChange(of: editedSpending) { _, _ in checkForChanges() }
                             }
                             .padding(16)
                             .background(

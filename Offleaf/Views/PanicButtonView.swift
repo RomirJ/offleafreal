@@ -8,6 +8,7 @@
 import SwiftUI
 import PhotosUI
 import UIKit
+import Photos
 
 struct PanicButtonView: View {
     @Environment(\.dismiss) var dismiss
@@ -257,7 +258,7 @@ struct PanicButtonView: View {
                 }
             }
         }
-        .navigationBarHidden(true)
+        .toolbar(.hidden, for: .navigationBar)
         .fullScreenCover(isPresented: $showingRelapsing) {
             ThinkingOfRelapsingView()
         }
@@ -310,20 +311,196 @@ struct SideEffectRow: View {
     }
 }
 
-// Camera View for capturing promise photos
+// Camera View for capturing promise photos with library access
 struct CameraView: View {
     @Binding var image: UIImage?
     let onCapture: (UIImage?) -> Void
     @Environment(\.dismiss) var dismiss
-    @State private var showingImagePicker = false
+    @State private var showingLibrary = false
+    @State private var latestPhotoThumbnail: UIImage?
+    @State private var selectedItem: PhotosPickerItem?
     
     var body: some View {
         ZStack {
             Color.black
                 .ignoresSafeArea()
             
-            CameraPickerView(image: $image, onCapture: onCapture, dismiss: dismiss)
-                .ignoresSafeArea()
+            // Camera view
+            CameraPickerView(
+                image: $image,
+                onCapture: onCapture,
+                dismiss: dismiss,
+                showingLibrary: $showingLibrary
+            )
+            .ignoresSafeArea()
+            
+            // Custom overlay with library button
+            VStack {
+                Spacer()
+                
+                HStack(alignment: .bottom) {
+                    // Photo library button with latest photo thumbnail
+                    Button(action: {
+                        showingLibrary = true
+                    }) {
+                        ZStack {
+                            // Background for the button
+                            RoundedRectangle(cornerRadius: 8)
+                                .fill(Color.black.opacity(0.3))
+                                .frame(width: 60, height: 60)
+                            
+                            if let thumbnail = latestPhotoThumbnail {
+                                // Show latest photo as thumbnail
+                                Image(uiImage: thumbnail)
+                                    .resizable()
+                                    .scaledToFill()
+                                    .frame(width: 56, height: 56)
+                                    .clipShape(RoundedRectangle(cornerRadius: 6))
+                                    .overlay(
+                                        RoundedRectangle(cornerRadius: 6)
+                                            .stroke(Color.white.opacity(0.3), lineWidth: 1)
+                                    )
+                            } else {
+                                // Fallback icon if no photos
+                                Image(systemName: "photo.on.rectangle")
+                                    .font(.system(size: 24))
+                                    .foregroundColor(.white.opacity(0.8))
+                            }
+                        }
+                    }
+                    .padding(.leading, 30)
+                    .padding(.bottom, 100)
+                    
+                    Spacer()
+                }
+            }
+        }
+        .onAppear {
+            loadLatestPhoto()
+        }
+        .sheet(isPresented: $showingLibrary) {
+            // Custom photo picker with dark theme
+            VStack(spacing: 0) {
+                // Custom header matching app's style
+                HStack {
+                    Button(action: { 
+                        showingLibrary = false 
+                    }) {
+                        Image(systemName: "xmark")
+                            .font(.system(size: 20, weight: .medium))
+                            .foregroundColor(.white.opacity(0.7))
+                            .frame(width: 44, height: 44)
+                    }
+                    
+                    Spacer()
+                    
+                    Text("Choose Your Promise")
+                        .font(.system(size: 18, weight: .bold))
+                        .foregroundColor(Color(red: 1, green: 0.4, blue: 0.4))
+                        .lineLimit(1)
+                        .minimumScaleFactor(0.8)
+                    
+                    Spacer()
+                    
+                    // Balance spacing
+                    Color.clear
+                        .frame(width: 44, height: 44)
+                }
+                .padding(.horizontal, 16)
+                .padding(.top, 60)
+                .padding(.bottom, 16)
+                .background(Color.black)
+                
+                // Divider line
+                Rectangle()
+                    .fill(Color.white.opacity(0.1))
+                    .frame(height: 1)
+                
+                // The actual photo picker
+                PhotosPicker(
+                    selection: $selectedItem,
+                    matching: .images,
+                    photoLibrary: .shared()
+                ) {
+                    // Custom content area with instructions
+                    VStack(spacing: 20) {
+                        Image(systemName: "photo.stack.fill")
+                            .font(.system(size: 48))
+                            .foregroundColor(Color(red: 1, green: 0.4, blue: 0.4).opacity(0.8))
+                        
+                        VStack(spacing: 8) {
+                            Text("Select from Library")
+                                .font(.system(size: 22, weight: .bold))
+                                .foregroundColor(.white)
+                            
+                            Text("Choose a photo that reminds you\nwhy you're making this change")
+                                .font(.system(size: 14))
+                                .foregroundColor(.white.opacity(0.6))
+                                .multilineTextAlignment(.center)
+                        }
+                    }
+                    .frame(maxWidth: .infinity, maxHeight: .infinity)
+                    .background(Color.black)
+                }
+                .photosPickerStyle(.inline)
+                .photosPickerAccessoryVisibility(.hidden, edges: .all)
+                .photosPickerDisabledCapabilities(.selectionActions)
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
+                .background(Color.black)
+                .preferredColorScheme(.dark)
+            }
+            .background(Color.black)
+            .preferredColorScheme(.dark)
+            .presentationBackground(Color.black)
+            .presentationDetents([.large])
+            .presentationCornerRadius(24)
+            .presentationDragIndicator(.hidden)
+            .onChange(of: selectedItem) { oldItem, newItem in
+                Task {
+                    if let data = try? await newItem?.loadTransferable(type: Data.self),
+                       let uiImage = UIImage(data: data) {
+                        await MainActor.run {
+                            image = uiImage
+                            onCapture(uiImage)
+                            showingLibrary = false
+                            dismiss()
+                        }
+                    }
+                }
+            }
+        }
+    }
+    
+    private func loadLatestPhoto() {
+        PHPhotoLibrary.requestAuthorization { status in
+            if status == .authorized {
+                let fetchOptions = PHFetchOptions()
+                fetchOptions.sortDescriptors = [NSSortDescriptor(key: "creationDate", ascending: false)]
+                fetchOptions.fetchLimit = 1
+                
+                let fetchResult = PHAsset.fetchAssets(with: .image, options: fetchOptions)
+                
+                if let asset = fetchResult.firstObject {
+                    let manager = PHImageManager.default()
+                    let option = PHImageRequestOptions()
+                    option.isSynchronous = false
+                    option.resizeMode = .fast
+                    option.deliveryMode = .fastFormat
+                    
+                    manager.requestImage(
+                        for: asset,
+                        targetSize: CGSize(width: 120, height: 120),
+                        contentMode: .aspectFill,
+                        options: option
+                    ) { result, _ in
+                        if let result = result {
+                            DispatchQueue.main.async {
+                                self.latestPhotoThumbnail = result
+                            }
+                        }
+                    }
+                }
+            }
         }
     }
 }
@@ -332,30 +509,53 @@ struct CameraPickerView: UIViewControllerRepresentable {
     @Binding var image: UIImage?
     let onCapture: (UIImage?) -> Void
     let dismiss: DismissAction
+    @Binding var showingLibrary: Bool
     
-    func makeUIViewController(context: Context) -> UIImagePickerController {
-        let picker = UIImagePickerController()
-        picker.delegate = context.coordinator
-        picker.sourceType = .camera
-        picker.cameraDevice = .front // Start with front camera for selfies
-        picker.cameraCaptureMode = .photo
-        picker.allowsEditing = true
-        picker.modalPresentationStyle = .overFullScreen
+    func makeUIViewController(context: Context) -> UIViewController {
+        // Create a container view controller
+        let containerVC = UIViewController()
+        containerVC.view.backgroundColor = .black
         
-        // Customize appearance to minimize white bars
-        picker.navigationBar.barStyle = .black
-        picker.navigationBar.isTranslucent = false
-        picker.navigationBar.barTintColor = .black
-        picker.navigationBar.tintColor = .white
-        picker.view.backgroundColor = .black
-        
-        // Set the camera overlay to fill the screen
-        picker.cameraViewTransform = CGAffineTransform(scaleX: 1.0, y: 1.0)
-        
-        return picker
+        // Check if camera is available
+        if UIImagePickerController.isSourceTypeAvailable(.camera) {
+            let picker = UIImagePickerController()
+            picker.delegate = context.coordinator
+            picker.sourceType = .camera
+            picker.cameraDevice = .front // Start with front camera for selfies
+            picker.cameraCaptureMode = .photo
+            picker.allowsEditing = true
+            
+            // Customize appearance
+            picker.navigationBar.barStyle = .black
+            picker.navigationBar.isTranslucent = false
+            picker.navigationBar.barTintColor = .black
+            picker.navigationBar.tintColor = .white
+            picker.view.backgroundColor = .black
+            
+            // Add as child view controller
+            containerVC.addChild(picker)
+            containerVC.view.addSubview(picker.view)
+            picker.view.translatesAutoresizingMaskIntoConstraints = false
+            NSLayoutConstraint.activate([
+                picker.view.topAnchor.constraint(equalTo: containerVC.view.topAnchor),
+                picker.view.bottomAnchor.constraint(equalTo: containerVC.view.bottomAnchor),
+                picker.view.leadingAnchor.constraint(equalTo: containerVC.view.leadingAnchor),
+                picker.view.trailingAnchor.constraint(equalTo: containerVC.view.trailingAnchor)
+            ])
+            picker.didMove(toParent: containerVC)
+            
+            return containerVC
+        } else {
+            // Fallback for simulator - show library picker immediately
+            DispatchQueue.main.async {
+                self.showingLibrary = true
+                self.dismiss()
+            }
+            return containerVC
+        }
     }
     
-    func updateUIViewController(_ uiViewController: UIImagePickerController, context: Context) {}
+    func updateUIViewController(_ uiViewController: UIViewController, context: Context) {}
     
     func makeCoordinator() -> Coordinator {
         Coordinator(self)

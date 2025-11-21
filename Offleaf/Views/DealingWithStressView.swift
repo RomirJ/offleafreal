@@ -133,7 +133,7 @@ struct DealingWithStressView: View {
                 }
             }
         }
-        .navigationBarHidden(true)
+        .toolbar(.hidden, for: .navigationBar)
         .sheet(isPresented: $showingTriggerExercise) {
             TriggerExerciseView()
         }

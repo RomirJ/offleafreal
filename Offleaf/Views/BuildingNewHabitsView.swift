@@ -68,7 +68,7 @@ struct BuildingNewHabitsView: View {
                                     .foregroundColor(.white)
                             }
                             
-                            Text("Research shows cannabis affects the brain's reward pathways¹. Here's how to support recovery:")
+                            Text("Cannabis hijacks your brain's reward system. Here's how to take it back:")
                                 .font(.system(size: 15))
                                 .foregroundColor(.white.opacity(0.8))
                             
@@ -244,7 +244,7 @@ struct BuildingNewHabitsView: View {
                                 .foregroundColor(.white)
                                 .padding(.horizontal, 24)
                             
-                            Text("Replace cannabis rituals with these healthy reward-generating alternatives²:")
+                            Text("Replace cannabis rituals with these dopamine-boosting alternatives:")
                                 .font(.system(size: 14))
                                 .foregroundColor(.white.opacity(0.7))
                                 .padding(.horizontal, 24)
@@ -362,43 +362,12 @@ struct BuildingNewHabitsView: View {
                         )
                         .padding(.horizontal, 24)
                         
-                        // Medical References
-                        VStack(alignment: .leading, spacing: 10) {
-                            Text("References")
-                                .font(.system(size: 16, weight: .bold))
-                                .foregroundColor(.white)
-                            
-                            VStack(alignment: .leading, spacing: 6) {
-                                Link("¹ Cannabis and Reward System", destination: URL(string: "https://www.ncbi.nlm.nih.gov/pmc/articles/PMC3405830/")!)
-                                    .font(.system(size: 12))
-                                    .foregroundColor(Color(red: 0.4, green: 0.6, blue: 1))
-                                    .underline()
-                                
-                                Link("² Healthy Habit Formation", destination: URL(string: "https://www.ncbi.nlm.nih.gov/pmc/articles/PMC3505409/")!)
-                                    .font(.system(size: 12))
-                                    .foregroundColor(Color(red: 0.4, green: 0.6, blue: 1))
-                                    .underline()
-                            }
-                            
-                            Text("Consult healthcare providers for personalized advice.")
-                                .font(.system(size: 11))
-                                .foregroundColor(.white.opacity(0.5))
-                                .italic()
-                                .padding(.top, 4)
-                        }
-                        .padding(16)
-                        .background(
-                            RoundedRectangle(cornerRadius: 16)
-                                .fill(Color.white.opacity(0.05))
-                        )
-                        .padding(.horizontal, 24)
-                        
                         Spacer(minLength: 40)
                     }
                 }
             }
         }
-        .navigationBarHidden(true)
+        .toolbar(.hidden, for: .navigationBar)
     }
 }
 

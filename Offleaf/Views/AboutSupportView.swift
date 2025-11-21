@@ -14,7 +14,6 @@ struct AboutSupportView: View {
     @Environment(\.dismiss) var dismiss
     @State private var showingFAQ = false
     @State private var showingShareSheet = false
-    @State private var showingMedicalReferences = false
     private let shareMessage = "Check out Offleaf - an app that helps you quit cannabis and reclaim your life! 🌿\n\nDownload it here: https://apps.apple.com/app/offleaf"
 #if canImport(MessageUI)
     @State private var showingMailComposer = false
@@ -104,7 +103,7 @@ struct AboutSupportView: View {
                             
                             VStack(spacing: 0) {
                                 ResourceLink(
-                                    title: "Terms of Use (EULA)",
+                                    title: "Terms of Service",
                                     action: showTerms
                                 )
                                 
@@ -122,14 +121,6 @@ struct AboutSupportView: View {
                                 ResourceLink(
                                     title: "Acknowledgments",
                                     action: showAcknowledgments
-                                )
-                                
-                                Divider()
-                                    .background(Color.white.opacity(0.1))
-                                
-                                ResourceLink(
-                                    title: "Medical References",
-                                    action: showMedicalReferences
                                 )
                             }
                             .background(
@@ -202,9 +193,6 @@ struct AboutSupportView: View {
         .sheet(isPresented: $showingShareSheet) {
             ShareSheet(items: [shareMessage])
         }
-        .sheet(isPresented: $showingMedicalReferences) {
-            MedicalReferencesView()
-        }
 #if canImport(MessageUI)
         .sheet(isPresented: $showingMailComposer) {
             MailComposeView(
@@ -268,25 +256,15 @@ struct AboutSupportView: View {
     }
     
     private func showTerms() {
-        // Link to Apple's standard Terms of Use (EULA)
-        if let url = URL(string: "https://www.apple.com/legal/internet-services/itunes/dev/stdeula/") {
-            UIApplication.shared.open(url)
-        }
+        openLegalHub()
     }
     
     private func showPrivacy() {
-        // Link to Privacy Policy
-        if let url = URL(string: "https://offleaf-legal-hub.lovable.app/") {
-            UIApplication.shared.open(url)
-        }
+        openLegalHub()
     }
     
     private func showAcknowledgments() {
         openLegalHub()
-    }
-    
-    private func showMedicalReferences() {
-        showingMedicalReferences = true
     }
     
     private func visitWebsite() {

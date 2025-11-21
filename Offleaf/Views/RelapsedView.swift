@@ -179,7 +179,7 @@ struct RelapsedView: View {
                 }
             }
         }
-        .navigationBarHidden(true)
+        .toolbar(.hidden, for: .navigationBar)
         .sheet(isPresented: $showingJournal) {
             RelapseJournalEntryView { entry in
                 journalManager.saveEntry(entry)

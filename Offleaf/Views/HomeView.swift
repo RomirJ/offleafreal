@@ -728,7 +728,7 @@ struct HomeView: View {
             daysClean = calculatedDaysClean
             animateDaysClean(to: calculatedDaysClean)
         }
-        .onChange(of: checkInStreak) { newValue in
+        .onChange(of: checkInStreak) { oldValue, newValue in
             daysClean = max(newValue, 0)
             animateDaysClean(to: newValue)
         }

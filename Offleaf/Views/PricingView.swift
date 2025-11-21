@@ -105,29 +105,14 @@ struct PricingView: View {
                                     .foregroundColor(.gray)
                             }
                             
-                            VStack(spacing: 8) {
-                                // Subscription Information
-                                Text("Auto-Renewable Subscription Details:")
-                                    .font(.system(size: 11, weight: .semibold))
+                            HStack(spacing: 16) {
+                                Link("Terms of Use", destination: URL(string: "https://www.apple.com/legal/internet-services/itunes/dev/stdeula/")!)
+                                    .font(.system(size: 12))
                                     .foregroundColor(.gray)
                                 
-                                Text(subscriptionDetailsText)
-                                    .font(.system(size: 10))
+                                Link("Privacy Policy", destination: URL(string: "https://offleaf-legal-hub.lovable.app/")!)
+                                    .font(.system(size: 12))
                                     .foregroundColor(.gray)
-                                    .multilineTextAlignment(.center)
-                                    .padding(.horizontal, 20)
-                                
-                                HStack(spacing: 16) {
-                                    Link("Terms of Use (EULA)", destination: URL(string: "https://www.apple.com/legal/internet-services/itunes/dev/stdeula/")!)
-                                        .font(.system(size: 12))
-                                        .foregroundColor(.gray)
-                                        .underline()
-                                    
-                                    Link("Privacy Policy", destination: URL(string: "https://offleaf-legal-hub.lovable.app/")!)
-                                        .font(.system(size: 12))
-                                        .foregroundColor(.gray)
-                                        .underline()
-                                }
                             }
                         }
                         .padding(.bottom, 32)
@@ -157,29 +142,6 @@ struct PricingView: View {
                 selectedFallbackPlan = nil
             }
         }
-    }
-    
-    private var subscriptionDetailsText: String {
-        if let product = selectedProduct {
-            let isAnnual = product.id.contains("annual")
-            let isLifetime = product.id.contains("lifetime")
-            if isLifetime {
-                return "Offleaf Lifetime - One-time purchase of \(product.displayPrice) for unlimited access."
-            } else if isAnnual {
-                return "Offleaf Premium Annual - \(product.displayPrice) per year. Subscription automatically renews unless canceled at least 24 hours before the end of the current period. Your account will be charged for renewal within 24 hours prior to the end of the current period. You can manage and cancel subscriptions in your App Store account settings."
-            } else {
-                return "Offleaf Premium Monthly - \(product.displayPrice) per month. Subscription automatically renews unless canceled at least 24 hours before the end of the current period. Your account will be charged for renewal within 24 hours prior to the end of the current period. You can manage and cancel subscriptions in your App Store account settings."
-            }
-        } else if let fallback = selectedFallbackPlan {
-            if fallback.id == "lifetime" {
-                return "Offleaf Lifetime - One-time purchase of $249.99 for unlimited access."
-            } else if fallback.id == "annual" {
-                return "Offleaf Premium Annual - $69.99 per year. Subscription automatically renews unless canceled at least 24 hours before the end of the current period. Your account will be charged for renewal within 24 hours prior to the end of the current period. You can manage and cancel subscriptions in your App Store account settings."
-            } else {
-                return "Offleaf Premium Monthly - $14.99 per month. Subscription automatically renews unless canceled at least 24 hours before the end of the current period. Your account will be charged for renewal within 24 hours prior to the end of the current period. You can manage and cancel subscriptions in your App Store account settings."
-            }
-        }
-        return "Subscription automatically renews unless canceled at least 24 hours before the end of the current period."
     }
     
     private var selectedFootnote: String {
@@ -425,15 +387,9 @@ struct SubscriptionCard: View {
                     }
                     
                 if includesTrial {
-                    VStack(alignment: .leading, spacing: 4) {
-                        Text("3-day free trial included")
+                    Text("3-day free trial included")
                             .font(.system(size: 12, weight: .medium))
                             .foregroundColor(trialAccentColor)
-                        
-                        Text("Auto-renews at \(product.displayPrice)\(priceSuffix.isEmpty ? "" : " \(priceSuffix)")")
-                            .font(.system(size: 10))
-                            .foregroundColor(secondaryTextColor.opacity(0.8))
-                    }
                     }
                 }
                 .frame(maxWidth: .infinity, alignment: .leading)

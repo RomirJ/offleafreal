@@ -115,7 +115,7 @@ struct CheckInCompletionView: View {
                     .allowsHitTesting(false)
             }
         }
-        .navigationBarHidden(true)
+        .toolbar(.hidden, for: .navigationBar)
         .sheet(isPresented: $isEditingName) {
             NameEntrySheet(name: $draftName) { newName in
                 let trimmed = newName.trimmingCharacters(in: .whitespacesAndNewlines)

@@ -280,7 +280,7 @@ struct JournalFeatureView: View {
                 }
             }
         }
-        .navigationBarHidden(true)
+        .toolbar(.hidden, for: .navigationBar)
         .onAppear {
             withAnimation(.easeOut(duration: 0.5)) {
                 animateGradient = true

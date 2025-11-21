@@ -355,7 +355,7 @@ struct WalkTrackerView: View {
                 }
             }
         }
-        .navigationBarHidden(true)
+        .toolbar(.hidden, for: .navigationBar)
         .onDisappear {
             walkManager.cancelActiveWalk()
         }

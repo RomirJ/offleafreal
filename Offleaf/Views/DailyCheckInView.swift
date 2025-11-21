@@ -115,7 +115,7 @@ struct DailyCheckInView: View {
                 .padding(.bottom, 50)
             }
         }
-        .navigationBarHidden(true)
+        .toolbar(.hidden, for: .navigationBar)
         .fullScreenCover(isPresented: $showingCompletion) {
             CheckInCompletionView(onDismiss: {
                 showingCompletion = false

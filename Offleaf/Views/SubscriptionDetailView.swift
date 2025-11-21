@@ -159,33 +159,11 @@ struct SubscriptionDetailView: View {
                             .disabled(isProcessing)
                             
                             // Terms
-                            VStack(spacing: 12) {
-                                Text(trialFootnote)
-                                    .font(.system(size: 12))
-                                    .foregroundColor(.white.opacity(0.5))
-                                    .multilineTextAlignment(.center)
-                                
-                                // Subscription Auto-Renewal Notice
-                                Text("Subscriptions automatically renew unless auto-renew is turned off at least 24 hours before the end of the current period. Your account will be charged for renewal within 24 hours prior to the end of the current period.")
-                                    .font(.system(size: 10))
-                                    .foregroundColor(.white.opacity(0.4))
-                                    .multilineTextAlignment(.center)
-                                    .padding(.horizontal, 20)
-                                
-                                // Links to Terms and Privacy
-                                HStack(spacing: 16) {
-                                    Link("Terms of Use (EULA)", destination: URL(string: "https://www.apple.com/legal/internet-services/itunes/dev/stdeula/")!)
-                                        .font(.system(size: 11))
-                                        .foregroundColor(Color(red: 0.3, green: 0.7, blue: 0.4))
-                                        .underline()
-                                    
-                                    Link("Privacy Policy", destination: URL(string: "https://offleaf-legal-hub.lovable.app/")!)
-                                        .font(.system(size: 11))
-                                        .foregroundColor(Color(red: 0.3, green: 0.7, blue: 0.4))
-                                        .underline()
-                                }
-                            }
-                            .padding(.top, 8)
+                            Text(trialFootnote)
+                                .font(.system(size: 12))
+                                .foregroundColor(.white.opacity(0.5))
+                                .multilineTextAlignment(.center)
+                                .padding(.top, 8)
                         }
                         
                         let statusForManage = subscriptionManager.getSubscriptionStatus()

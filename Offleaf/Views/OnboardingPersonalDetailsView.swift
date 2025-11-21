@@ -60,7 +60,7 @@ struct OnboardingPersonalDetailsView: View {
                         .frame(width: 40, height: 40)
                 }
                 .padding(.horizontal, 20)
-                .padding(.top, 60)
+                .padding(.top, 20)
                 
                 ScrollView {
                     VStack(alignment: .leading, spacing: 40) {
@@ -80,7 +80,7 @@ struct OnboardingPersonalDetailsView: View {
                                 .foregroundColor(.white.opacity(0.7))
                                 .padding(.top, 4)
                         }
-                        .padding(.top, 40)
+                        .padding(.top, 20)
                         
                         VStack(spacing: 24) {
                             // Name Input
@@ -137,7 +137,7 @@ struct OnboardingPersonalDetailsView: View {
                                                     .fill(focusedField == .age ? Color.green.opacity(0.08) : Color.white.opacity(0.05))
                                             )
                                     )
-                                    .onChange(of: userAge) { newValue in
+                                    .onChange(of: userAge) { oldValue, newValue in
                                         // Only allow numbers and validate age range
                                         let filtered = newValue.filter { $0.isNumber }
                                         
@@ -198,6 +198,23 @@ struct OnboardingPersonalDetailsView: View {
                 
                 // Continue button
                 VStack(spacing: 12) {
+                    // Done button for number pad - only show when age field is focused
+                    if focusedField == .age {
+                        HStack {
+                            Spacer()
+                            Button(action: {
+                                focusedField = nil
+                            }) {
+                                Text("Done")
+                                    .font(.system(size: 16, weight: .semibold))
+                                    .foregroundColor(Color(red: 0.4, green: 0.85, blue: 0.45))
+                                    .padding(.vertical, 8)
+                            }
+                        }
+                        .padding(.bottom, 4)
+                        .transition(.opacity)
+                    }
+                    
                     Button(action: {
                         saveAndContinue()
                     }) {
@@ -234,30 +251,11 @@ struct OnboardingPersonalDetailsView: View {
                 .padding(.horizontal, 24)
                 .padding(.bottom, 40)
             }
-            
-            // Done button for number pad
-            if focusedField == .age {
-                VStack {
-                    Spacer()
-                    
-                    Button(action: {
-                        focusedField = nil
-                    }) {
-                        Text("Done")
-                            .font(.system(size: 17, weight: .semibold))
-                            .foregroundColor(.black)
-                            .frame(maxWidth: .infinity)
-                            .frame(height: 50)
-                            .background(Color(red: 0.3, green: 0.7, blue: 0.4))
-                            .cornerRadius(25)
-                    }
-                    .padding(.horizontal, 24)
-                    .padding(.bottom, 10)
-                    .transition(.move(edge: .bottom).combined(with: .opacity))
-                }
-            }
         }
         .animation(.spring(response: 0.3, dampingFraction: 0.8), value: focusedField)
+        .onTapGesture {
+            focusedField = nil
+        }
     }
     
     private func saveAndContinue() {

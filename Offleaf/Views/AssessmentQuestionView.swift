@@ -267,7 +267,7 @@ struct AssessmentQuestion3View: View {
                                     isFocused = true
                                 }
                             }
-                            .onChange(of: spendingAmount) { newValue in
+                            .onChange(of: spendingAmount) { oldValue, newValue in
                                 let sanitized = sanitizedAmount(newValue)
                                 if sanitized != newValue {
                                     spendingAmount = sanitized

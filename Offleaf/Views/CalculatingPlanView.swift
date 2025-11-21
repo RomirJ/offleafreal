@@ -6,15 +6,17 @@
 //
 
 import SwiftUI
+import Combine
 
 struct CalculatingPlanView: View {
     @State private var progress: Double = 0
     @State private var displayProgress: Int = 0
     @State private var showDone = false
     @State private var showCheckmark = false
+    @State private var timerCancellable: AnyCancellable?
     var onComplete: () -> Void
     
-    let timer = Timer.publish(every: 0.025, on: .main, in: .common).autoconnect()
+    let timer = Timer.publish(every: 0.025, on: .main, in: .common)
     
     var body: some View {
         ZStack {
@@ -129,16 +131,10 @@ struct CalculatingPlanView: View {
                 Spacer()
             }
         }
-        .onReceive(timer) { _ in
-            // Update display progress to match actual progress
-            if displayProgress < 100 && progress > 0 {
-                let targetProgress = Int(progress * 100)
-                if displayProgress < targetProgress {
-                    displayProgress = min(displayProgress + 1, 100)
-                }
-            }
-        }
         .onAppear {
+            // Connect the timer and store the cancellable
+            timerCancellable = AnyCancellable(timer.connect())
+            
             // Start animation after a brief delay to ensure 0% is visible
             DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
                 // Animate progress from 0 to 100%
@@ -149,7 +145,10 @@ struct CalculatingPlanView: View {
             
             // After progress completes, show Done state
             DispatchQueue.main.asyncAfter(deadline: .now() + 2.8) {
-                timer.upstream.connect().cancel()
+                // Cancel the timer properly
+                timerCancellable?.cancel()
+                timerCancellable = nil
+                
                 withAnimation(.easeInOut(duration: 0.3)) {
                     showDone = true
                 }
@@ -164,6 +163,20 @@ struct CalculatingPlanView: View {
                     onComplete()
                 }
             }
+        }
+        .onReceive(timer) { _ in
+            // Update display progress to match actual progress
+            if displayProgress < 100 && progress > 0 {
+                let targetProgress = Int(progress * 100)
+                if displayProgress < targetProgress {
+                    displayProgress = min(displayProgress + 1, 100)
+                }
+            }
+        }
+        .onDisappear {
+            // Clean up timer if view disappears early
+            timerCancellable?.cancel()
+            timerCancellable = nil
         }
     }
 }

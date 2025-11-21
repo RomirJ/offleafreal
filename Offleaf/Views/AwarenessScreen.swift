@@ -15,8 +15,8 @@ struct AwarenessScreen: View {
     var onComplete: () -> Void
     
     let infoCards = [
-        (number: "1", text: "Research shows long-term cannabis use can impact cognitive function, including memory and processing speed¹."),
-        (number: "2", text: "Studies indicate cannabis smoking can cause respiratory symptoms and chronic bronchitis²."),
+        (number: "1", text: "Heavy cannabis use can cause brain fog, memory issues, and low motivation."),
+        (number: "2", text: "Smoking weed can damage lungs, reduce stamina, and drain energy."),
         (number: "3", text: "Frequent cannabis use can strain relationships and cause financial loss.")
     ]
     
@@ -74,35 +74,16 @@ struct AwarenessScreen: View {
                 
                 Spacer()
                 
-                // Button and Citations
+                // Button
                 if showButton {
-                    VStack(spacing: 16) {
-                        Button(action: onComplete) {
-                            Text("Life Ahead")
-                                .font(.system(size: 18, weight: .semibold))
-                                .foregroundColor(Color(red: 0.93, green: 0.35, blue: 0.35))
-                                .frame(maxWidth: .infinity)
-                                .frame(height: 56)
-                                .background(Color.white.opacity(0.9))
-                                .cornerRadius(28)
-                        }
-                        
-                        // Citations
-                        VStack(alignment: .leading, spacing: 6) {
-                            Text("References:")
-                                .font(.system(size: 11, weight: .semibold))
-                                .foregroundColor(.white.opacity(0.6))
-                            
-                            Link("¹ Cannabis & Cognition Study", destination: URL(string: "https://psychiatryonline.org/doi/10.1176/appi.ajp.2021.21060664")!)
-                                .font(.system(size: 10))
-                                .foregroundColor(Color(red: 0.4, green: 0.6, blue: 1))
-                                .underline()
-                            
-                            Link("² Respiratory Effects", destination: URL(string: "https://www.lung.org/quit-smoking/smoking-facts/health-effects/marijuana-and-lung-health")!)
-                                .font(.system(size: 10))
-                                .foregroundColor(Color(red: 0.4, green: 0.6, blue: 1))
-                                .underline()
-                        }
+                    Button(action: onComplete) {
+                        Text("Life Ahead")
+                            .font(.system(size: 18, weight: .semibold))
+                            .foregroundColor(Color(red: 0.93, green: 0.35, blue: 0.35))
+                            .frame(maxWidth: .infinity)
+                            .frame(height: 56)
+                            .background(Color.white.opacity(0.9))
+                            .cornerRadius(28)
                     }
                     .padding(.horizontal, 24)
                     .padding(.bottom, 50)

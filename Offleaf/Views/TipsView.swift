@@ -54,7 +54,7 @@ struct TipsView: View {
         // Cravings
         Tip(icon: "timer", iconColor: Color(red: 1, green: 0.7, blue: 0.3), 
             title: "The 10-Minute Rule", 
-            description: "When a craving hits, wait 10 minutes before acting on it. Research shows cravings can remain elevated for 15-150 minutes after cue exposure¹. Use this time to do something else - take a walk, drink water, or practice deep breathing.", 
+            description: "When a craving hits, wait 10 minutes before acting on it. Most cravings peak and fade within 3-10 minutes. Use this time to do something else - take a walk, drink water, or practice deep breathing.", 
             category: .cravings),
         
         Tip(icon: "figure.walk", iconColor: Color(red: 0.4, green: 0.7, blue: 1), 
@@ -70,17 +70,17 @@ struct TipsView: View {
         // Health & Recovery
         Tip(icon: "bed.double.fill", iconColor: Color(red: 0.5, green: 0.4, blue: 0.8), 
             title: "Prioritize Sleep", 
-            description: "Studies show sleep disruption peaks in the first 2 weeks of withdrawal, with reduced total sleep time and altered REM patterns². Establish a bedtime routine, avoid screens before bed, and consult your doctor about sleep aids.", 
+            description: "Your sleep patterns may be disrupted for 1-2 weeks. Establish a bedtime routine, avoid screens before bed, and consider melatonin supplements (consult your doctor first).", 
             category: .health),
         
         Tip(icon: "drop.fill", iconColor: Color(red: 0.3, green: 0.7, blue: 1), 
             title: "Stay Hydrated", 
-            description: "Adequate hydration supports THC metabolite clearance through urine (20% of cannabis metabolites are excreted this way)³. Aim for 8-10 glasses daily to support your body's natural detox processes.", 
+            description: "Drink plenty of water to help flush THC from your system. Aim for 8-10 glasses daily. This also helps with headaches and fatigue during withdrawal.", 
             category: .health),
         
         Tip(icon: "figure.run", iconColor: Color(red: 0.3, green: 0.7, blue: 0.4), 
             title: "Exercise Daily", 
-            description: "Research shows 20-40 minutes of aerobic exercise increases endorphins and can improve mood for several hours⁴. Exercise may also affect THC release from fat stores⁵. Start with moderate activity.", 
+            description: "Physical activity releases natural endorphins, improves mood, and helps with sleep. Even 20 minutes of walking makes a difference. It also helps metabolize remaining THC faster.", 
             category: .health),
         
         // Lifestyle Changes
@@ -102,7 +102,7 @@ struct TipsView: View {
         // Mindfulness
         Tip(icon: "wind", iconColor: Color(red: 0.4, green: 0.8, blue: 0.6), 
             title: "Practice 4-7-8 Breathing", 
-            description: "Inhale for 4 counts, hold for 7, exhale for 8. This technique stimulates the vagus nerve and activates the parasympathetic nervous system, with studies showing potential stress reduction⁶.", 
+            description: "Inhale for 4 counts, hold for 7, exhale for 8. This activates your parasympathetic nervous system, reducing anxiety and cravings naturally.", 
             category: .mindfulness),
         
         Tip(icon: "sparkles", iconColor: Color(red: 0.6, green: 0.4, blue: 0.8), 
@@ -112,7 +112,7 @@ struct TipsView: View {
         
         Tip(icon: "heart.text.square.fill", iconColor: Color(red: 1, green: 0.4, blue: 0.6), 
             title: "Practice Gratitude", 
-            description: "Write down 3 things you're grateful for each day. Regular gratitude practice has been associated with improved mood and well-being in psychological research.", 
+            description: "Write down 3 things you're grateful for each day. This rewires your brain for positivity and reduces the desire to escape through substances.", 
             category: .mindfulness)
     ]
     
@@ -260,43 +260,12 @@ struct TipsView: View {
                             }
                         }
                         .padding(.horizontal, 20)
-                        
-                        // Citations section
-                        VStack(alignment: .leading, spacing: 12) {
-                            Text("Medical References")
-                                .font(.system(size: 20, weight: .bold))
-                                .foregroundColor(.white)
-                                .padding(.horizontal, 20)
-                            
-                            VStack(alignment: .leading, spacing: 8) {
-                                CitationLink(number: "1", text: "Craving Duration Study", url: "https://www.ncbi.nlm.nih.gov/pmc/articles/PMC5113710/")
-                                CitationLink(number: "2", text: "Sleep Disturbance in Cannabis Withdrawal", url: "https://pmc.ncbi.nlm.nih.gov/articles/PMC2442418/")
-                                CitationLink(number: "3", text: "Cannabis Metabolism and Excretion", url: "https://pmc.ncbi.nlm.nih.gov/articles/PMC3570572/")
-                                CitationLink(number: "4", text: "Exercise and Mood Enhancement", url: "https://pmc.ncbi.nlm.nih.gov/articles/PMC474733/")
-                                CitationLink(number: "5", text: "THC Release from Fat Tissue", url: "https://pmc.ncbi.nlm.nih.gov/articles/PMC2782342/")
-                                CitationLink(number: "6", text: "4-7-8 Breathing and Stress Reduction", url: "https://health.clevelandclinic.org/4-7-8-breathing")
-                            }
-                            .padding(.horizontal, 20)
-                            
-                            Text("Always consult with healthcare providers for personalized medical advice.")
-                                .font(.system(size: 14))
-                                .foregroundColor(.white.opacity(0.6))
-                                .italic()
-                                .padding(.horizontal, 20)
-                                .padding(.top, 8)
-                        }
-                        .padding(.vertical, 20)
-                        .background(
-                            RoundedRectangle(cornerRadius: 20)
-                                .fill(Color.white.opacity(0.05))
-                        )
-                        .padding(.horizontal, 20)
                         .padding(.bottom, 40)
                     }
                 }
             }
         }
-        .navigationBarHidden(true)
+        .toolbar(.hidden, for: .navigationBar)
         .onAppear {
             withAnimation(.easeOut(duration: 0.5)) {
                 animateGradient = true
@@ -459,29 +428,6 @@ struct TipCard: View {
             .delay(Double(index) * 0.05 + 0.3),
             value: showContent
         )
-    }
-}
-
-struct CitationLink: View {
-    let number: String
-    let text: String
-    let url: String
-    
-    var body: some View {
-        Link(destination: URL(string: url)!) {
-            HStack(spacing: 4) {
-                Text("[\(number)]")
-                    .font(.system(size: 12, weight: .bold))
-                    .foregroundColor(Color(red: 0.4, green: 0.6, blue: 1))
-                Text(text)
-                    .font(.system(size: 14))
-                    .foregroundColor(Color(red: 0.4, green: 0.6, blue: 1))
-                    .underline()
-                Image(systemName: "arrow.up.right.square")
-                    .font(.system(size: 10))
-                    .foregroundColor(Color(red: 0.4, green: 0.6, blue: 1))
-            }
-        }
     }
 }
 
