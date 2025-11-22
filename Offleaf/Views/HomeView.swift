@@ -605,7 +605,7 @@ struct HomeView: View {
                         
                         // Cannabis Avoided Card
                         InteractiveStatCard(
-                            icon: "leaf.slash",
+                            icon: "leaf",
                             iconColor: Color(red: 0.9, green: 0.4, blue: 0.4),
                             title: "Not Consumed",
                             value: calculatedJointsAvoided.fullDisplay,
