@@ -198,23 +198,6 @@ struct OnboardingPersonalDetailsView: View {
                 
                 // Continue button
                 VStack(spacing: 12) {
-                    // Done button for number pad - only show when age field is focused
-                    if focusedField == .age {
-                        HStack {
-                            Spacer()
-                            Button(action: {
-                                focusedField = nil
-                            }) {
-                                Text("Done")
-                                    .font(.system(size: 16, weight: .semibold))
-                                    .foregroundColor(Color(red: 0.4, green: 0.85, blue: 0.45))
-                                    .padding(.vertical, 8)
-                            }
-                        }
-                        .padding(.bottom, 4)
-                        .transition(.opacity)
-                    }
-                    
                     Button(action: {
                         saveAndContinue()
                     }) {

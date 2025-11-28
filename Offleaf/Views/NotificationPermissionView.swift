@@ -18,6 +18,7 @@ struct NotificationPermissionView: View {
     @State private var showPermissionAlert = false
     @State private var permissionAlertMessage = ""
     @State private var showOpenSettingsButton = false
+    @Environment(\.scenePhase) var scenePhase
     
     var onComplete: () -> Void
     var onSkip: () -> Void
@@ -233,6 +234,18 @@ struct NotificationPermissionView: View {
             loadCheckInTime()
             notificationManager.checkPermissionStatus()
         }
+        .onChange(of: scenePhase) { oldPhase, newPhase in
+            if newPhase == .active {
+                // Refresh permission status when returning from Settings
+                notificationManager.checkPermissionStatus()
+                
+                // If permission was granted while in Settings, auto-proceed
+                if notificationManager.permissionStatus == .authorized && showPermissionAlert {
+                    showPermissionAlert = false
+                    onComplete()
+                }
+            }
+        }
         .safeAreaInset(edge: .bottom) {
             Color.clear.frame(height: showTimePickerStored ? 40 : 16)
         }
@@ -284,27 +297,35 @@ struct NotificationPermissionView: View {
         // Save the selected time before requesting permission
         saveCheckInTime(selectedTime)
         
-        if notificationManager.permissionStatus == .denied {
-            permissionAlertMessage = "Notifications are currently turned off. Enable them in Settings to receive reminders."
-            showOpenSettingsButton = true
-            showPermissionAlert = true
-            return
-        }
-        
+        // Don't pre-check permission status - let requestPermission handle it
         permissionRequested = true
         
         Task {
+            // Always attempt to request permission
+            // If already denied, this will return false immediately
+            // If not determined, this will show the iOS dialog
+            // If already authorized, this will return true immediately
             let granted = await notificationManager.requestPermission()
             
             await MainActor.run {
                 permissionRequested = false
+                
+                // Re-check current status after request attempt
+                notificationManager.checkPermissionStatus()
+                
                 if granted {
                     showOpenSettingsButton = false
                     showPermissionAlert = false
                     onComplete()
                 } else {
-                    permissionAlertMessage = "We couldn't enable notifications right now. You can turn them on later from Settings."
-                    showOpenSettingsButton = notificationManager.permissionStatus == .denied
+                    // Check the actual current status to show appropriate message
+                    if notificationManager.permissionStatus == .denied {
+                        permissionAlertMessage = "Notifications are currently turned off. Enable them in Settings to receive reminders."
+                        showOpenSettingsButton = true
+                    } else {
+                        permissionAlertMessage = "We couldn't enable notifications right now. You can turn them on later from Settings."
+                        showOpenSettingsButton = false
+                    }
                     showPermissionAlert = true
                 }
             }

@@ -16,6 +16,8 @@ struct ContentView: View {
                 .onAppear {
                     // Clear any reset flag on app launch
                     UserDefaults.standard.set(false, forKey: "justResetCounter")
+                    // Validate streak status on app launch
+                    StreakManager.shared.validateStreak()
                 }
         } else {
             OnboardingContainerView()

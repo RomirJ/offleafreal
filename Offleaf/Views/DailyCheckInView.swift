@@ -16,10 +16,7 @@ struct DailyCheckInView: View {
     @State private var practicedCoping: Bool? = nil
     @State private var showingCompletion = false
     @State private var progressWidth: CGFloat = 0.25
-    @AppStorage("checkInStreak") private var checkInStreak = 0
-    @AppStorage("daysClean") private var storedDaysClean = 0
-    @AppStorage("longestCheckInStreak") private var longestCheckInStreak = 0
-    @AppStorage("totalCheckInDays") private var totalCheckInDays = 0
+    @StateObject private var streakManager = StreakManager.shared
     @AppStorage("lastCheckInDate") private var lastCheckInDateString = ""
     @AppStorage("checkInDates") private var checkInDatesString = ""
     
@@ -275,24 +272,9 @@ extension DailyCheckInView {
         let formatter = ISO8601DateFormatter()
         let dayFormatter = DailyCheckInView.dayFormatter
 
-        if let lastDate = formatter.date(from: lastCheckInDateString) {
-            let lastDay = calendar.startOfDay(for: lastDate)
-            let delta = calendar.dateComponents([.day], from: lastDay, to: today).day ?? 0
-            switch delta {
-            case 0:
-                checkInStreak = max(checkInStreak, 1)
-            case 1:
-                checkInStreak += 1
-            default:
-                checkInStreak = 1
-            }
-        } else {
-            checkInStreak = 1
-        }
-
-        longestCheckInStreak = max(longestCheckInStreak, checkInStreak)
-        storedDaysClean = checkInStreak
-
+        // Update streak using StreakManager
+        streakManager.recordCheckIn()
+        
         lastCheckInDateString = formatter.string(from: today)
 
         // Persist this check-in date for weekly calendars and analytics
@@ -312,9 +294,6 @@ extension DailyCheckInView {
         let limitedDates = existingDates.suffix(maxStoredCheckInDays)
         checkInDatesString = limitedDates.map { $0.0 }.joined(separator: ",")
         if insertedNewDate {
-            totalCheckInDays += 1
-        } else if totalCheckInDays == 0 {
-            totalCheckInDays = existingDates.count
         }
 
         if let mood = selectedMood,
@@ -338,7 +317,8 @@ private extension DailyCheckInView {
         let formatter = DateFormatter()
         formatter.calendar = Calendar(identifier: .gregorian)
         formatter.locale = Locale(identifier: "en_US_POSIX")
-        formatter.timeZone = TimeZone(secondsFromGMT: 0)
+        // Use local timezone for consistency
+        formatter.timeZone = TimeZone.current
         formatter.dateFormat = "yyyy-MM-dd"
         return formatter
     }()

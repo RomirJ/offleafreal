@@ -9,6 +9,7 @@ import SwiftUI
 import Combine
 
 struct ProgressTabView: View {
+    @StateObject private var streakManager = StreakManager.shared
     @State private var selectedTab: String = "Mood"
     @State private var checkInEntries: [DailyCheckInEntry] = []
     
@@ -16,10 +17,6 @@ struct ProgressTabView: View {
     @AppStorage("quitDate") private var quitDateString = ""
     @AppStorage("weeklySpending") private var weeklySpending: Double = 0
     @AppStorage("smokeFrequency") private var smokeFrequencyRaw = CannabisUseFrequency.unknown.rawValue
-    @AppStorage("daysClean") private var storedDaysClean = 0
-    @AppStorage("checkInStreak") private var checkInStreak = 0
-    @AppStorage("longestCheckInStreak") private var storedLongestStreak = 0
-    @AppStorage("totalCheckInDays") private var storedTotalDays = 0
     @AppStorage("checkInDates") private var checkInDatesString = ""
     @AppStorage("lastCheckInDate") private var lastCheckInDateString = ""
     
@@ -29,17 +26,15 @@ struct ProgressTabView: View {
         let formatter = DateFormatter()
         formatter.calendar = Calendar(identifier: .gregorian)
         formatter.locale = Locale(identifier: "en_US_POSIX")
-        formatter.timeZone = TimeZone(secondsFromGMT: 0)
+        // Use local timezone for consistency
+        formatter.timeZone = TimeZone.current
         formatter.dateFormat = "yyyy-MM-dd"
         return formatter
     }()
 
-    // Prefer streak-based progress but fall back to legacy counters if needed.
+    // Use unified streak from StreakManager
     private var currentStreak: Int {
-        let streakDays = max(checkInStreak, 0)
-        if streakDays > 0 { return streakDays }
-        if storedDaysClean > 0 { return storedDaysClean }
-        return derivedDaysFromQuitDate
+        streakManager.currentStreak
     }
 
     private var derivedDaysFromQuitDate: Int {
@@ -52,18 +47,11 @@ struct ProgressTabView: View {
     }
 
     private var longestStreak: Int {
-        let trackedValue = max(storedLongestStreak, currentStreak)
-        if trackedValue > 0 {
-            return trackedValue
-        }
-        return max(currentStreak, computedLongestStreak)
+        max(streakManager.longestStreak, currentStreak)
     }
 
     private var totalDays: Int {
-        if storedTotalDays > 0 {
-            return max(storedTotalDays, currentStreak)
-        }
-        return max(checkInDateStrings.count, currentStreak)
+        max(streakManager.totalDays, checkInDateStrings.count)
     }
 
     private var computedLongestStreak: Int {
@@ -376,8 +364,8 @@ private extension ProgressTabView {
     func reconcileStreakIfNeeded() {
         guard !lastCheckInDateString.isEmpty else {
             // No last check-in, ensure streak is 0 if no check-ins exist
-            if checkInDateStrings.isEmpty && checkInStreak != 0 {
-                checkInStreak = 0
+            if checkInDateStrings.isEmpty {
+                streakManager.validateStreak()
             }
             return
         }
@@ -391,8 +379,8 @@ private extension ProgressTabView {
         let delta = calendar.dateComponents([.day], from: lastDay, to: today).day ?? 0
         
         // If more than 1 day has passed since last check-in, reset streak
-        if delta > 1 && checkInStreak != 0 {
-            checkInStreak = 0
+        if delta > 1 {
+            streakManager.validateStreak()
         }
     }
 }

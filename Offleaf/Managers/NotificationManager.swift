@@ -451,6 +451,80 @@ class NotificationManager: NSObject, ObservableObject {
         UNUserNotificationCenter.current().removePendingNotificationRequests(withIdentifiers: milestoneIdentifiers + motivationIdentifiers + cravingIdentifiers)
         await scheduleInitialNotifications(clearExisting: false)
     }
+    
+    func refreshScheduledNotifications() {
+        UNUserNotificationCenter.current().getPendingNotificationRequests { requests in
+            let hasCheckIn = requests.contains { $0.identifier == "daily-checkin" }
+            if !hasCheckIn && self.dailyCheckInEnabled {
+                self.scheduleDailyCheckIn()
+            }
+        }
+    }
+    
+    func scheduleAllNotifications() {
+        if dailyCheckInEnabled {
+            scheduleDailyCheckIn()
+        }
+        
+        if motivationalQuotesEnabled {
+            Task {
+                await scheduleMotivationalQuotes()
+            }
+        }
+        
+        if milestoneRemindersEnabled {
+            Task {
+                await scheduleMilestoneNotifications()
+            }
+        }
+        
+        if cravingTipsEnabled {
+            scheduleCravingSupport()
+        }
+    }
+    
+    func scheduleCheckInReminderIfNeeded() {
+        guard dailyCheckInEnabled else { return }
+        
+        let calendar = Calendar.current
+        let now = Date()
+        let components = checkInTimeString.split(separator: ":")
+        
+        guard components.count == 2,
+              let hour = Int(components[0]),
+              let minute = Int(components[1]) else { return }
+        
+        var dateComponents = calendar.dateComponents([.year, .month, .day], from: now)
+        dateComponents.hour = hour
+        dateComponents.minute = minute
+        
+        guard let checkInTime = calendar.date(from: dateComponents) else { return }
+        
+        if checkInTime > now {
+            let content = UNMutableNotificationContent()
+            content.title = "Time for Your Check-In"
+            content.body = "Let's see how you're doing today!"
+            content.sound = .default
+            content.categoryIdentifier = "DAILY_CHECKIN"
+            
+            let trigger = UNTimeIntervalNotificationTrigger(
+                timeInterval: checkInTime.timeIntervalSince(now),
+                repeats: false
+            )
+            
+            let request = UNNotificationRequest(
+                identifier: "daily-checkin-reminder",
+                content: content,
+                trigger: trigger
+            )
+            
+            UNUserNotificationCenter.current().add(request) { error in
+                if let error = error {
+                    print("Error scheduling check-in reminder: \(error)")
+                }
+            }
+        }
+    }
 
     private func addNotificationRequest(_ request: UNNotificationRequest) async throws {
         try await withCheckedThrowingContinuation { (continuation: CheckedContinuation<Void, Error>) in

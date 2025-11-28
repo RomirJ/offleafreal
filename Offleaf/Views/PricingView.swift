@@ -12,11 +12,23 @@ import Foundation
 struct PricingView: View {
     @ObservedObject private var subscriptionManager = SubscriptionManager.shared
     @ObservedObject private var storeKitManager = StoreKitManager.shared
+    @ObservedObject private var networkMonitor = NetworkMonitor.shared
     @State private var selectedProduct: Product?
     @State private var selectedFallbackPlan: SubscriptionPlanOption?
     @State private var isPurchasing = false
     @State private var showError = false
     @State private var errorMessage = ""
+    @State private var isNetworkError = false
+    
+    private static let termsOfUseURL: URL = {
+        URL(string: "https://www.apple.com/legal/internet-services/itunes/dev/stdeula/") 
+        ?? URL(string: "https://www.apple.com/legal/")!
+    }()
+    
+    private static let privacyPolicyURL: URL = {
+        URL(string: "https://offleaf-legal-hub.lovable.app/")
+        ?? URL(string: "https://lovable.app/privacy")!
+    }()
     
     var onComplete: () -> Void
     
@@ -32,23 +44,26 @@ struct PricingView: View {
                 let bottomPadding = max(bottomInset, 20) + 32
 
                 ScrollView(showsIndicators: false) {
-                    VStack(spacing: 28) {
-                        LeafLogoView(size: 50)
-                            .padding(.top, topInset + 12)
+                    VStack(spacing: 16) {
+                        Image("LeafLogo")
+                            .resizable()
+                            .aspectRatio(contentMode: .fit)
+                            .frame(width: 140, height: 140)
+                            .padding(.top, max(topInset - 20, 0))
 
-                        VStack(alignment: .leading, spacing: 12) {
+                        VStack(alignment: .leading, spacing: 10) {
                             Text("Your personalized")
-                                .font(.system(size: 34, weight: .bold))
+                                .font(.system(size: 32, weight: .bold))
                                 .foregroundColor(.white)
                             
                             Text("plan is ready")
-                                .font(.system(size: 34, weight: .bold))
+                                .font(.system(size: 32, weight: .bold))
                                 .foregroundColor(.white)
                             
                             Text("Unlock full access to continue your journey.")
-                                .font(.system(size: 17, weight: .regular))
+                                .font(.system(size: 16, weight: .regular))
                                 .foregroundColor(.gray)
-                                .padding(.top, 8)
+                                .padding(.top, 2)
                         }
                         .frame(maxWidth: .infinity, alignment: .leading)
                         .padding(.horizontal, 24)
@@ -59,14 +74,19 @@ struct PricingView: View {
                             liveProductsSection
                         }
 
-                        VStack(spacing: 16) {
+                        VStack(spacing: 12) {
                             Text(selectedFootnote)
-                                .font(.system(size: 14, weight: .regular))
+                                .font(.system(size: 13, weight: .regular))
                                 .foregroundColor(.white.opacity(0.6))
                             
                             Button(action: {
-                                Task {
-                                    await purchaseSubscription()
+                                if !networkMonitor.isConnected {
+                                    errorMessage = "No internet connection. Please check your connection and try again."
+                                    showError = true
+                                } else {
+                                    Task {
+                                        await purchaseSubscription()
+                                    }
                                 }
                             }) {
                                 if isPurchasing {
@@ -76,6 +96,18 @@ struct PricingView: View {
                                         .frame(height: 56)
                                         .background(Color.white)
                                         .cornerRadius(28)
+                                } else if !networkMonitor.isConnected {
+                                    HStack {
+                                        Image(systemName: "wifi.slash")
+                                            .font(.system(size: 16))
+                                        Text("No Connection")
+                                            .font(.system(size: 18, weight: .semibold))
+                                    }
+                                    .foregroundColor(.black)
+                                    .frame(maxWidth: .infinity)
+                                    .frame(height: 56)
+                                    .background(Color.white.opacity(0.5))
+                                    .cornerRadius(28)
                                 } else {
                                     Text("Start Free Trial")
                                         .font(.system(size: 18, weight: .semibold))
@@ -87,7 +119,7 @@ struct PricingView: View {
                                 }
                             }
                             .padding(.horizontal, 24)
-                            .disabled((selectedProduct == nil && selectedFallbackPlan == nil) || isPurchasing)
+                            .disabled((selectedProduct == nil && selectedFallbackPlan == nil) || isPurchasing || !networkMonitor.isConnected)
 
                             if storeKitManager.subscriptions.isEmpty {
                                 Text("Sign in to your App Store account to complete the purchase when you're ready.")
@@ -106,11 +138,11 @@ struct PricingView: View {
                             }
                             
                             HStack(spacing: 16) {
-                                Link("Terms of Use", destination: URL(string: "https://www.apple.com/legal/internet-services/itunes/dev/stdeula/")!)
+                                Link("Terms of Use", destination: Self.termsOfUseURL)
                                     .font(.system(size: 12))
                                     .foregroundColor(.gray)
                                 
-                                Link("Privacy Policy", destination: URL(string: "https://offleaf-legal-hub.lovable.app/")!)
+                                Link("Privacy Policy", destination: Self.privacyPolicyURL)
                                     .font(.system(size: 12))
                                     .foregroundColor(.gray)
                             }
@@ -125,7 +157,18 @@ struct PricingView: View {
             }
         }
         .alert("Error", isPresented: $showError) {
-            Button("OK", role: .cancel) {}
+            if isNetworkError {
+                Button("Try Again") {
+                    Task {
+                        await purchaseSubscription()
+                    }
+                }
+                Button("Cancel", role: .cancel) {
+                    isNetworkError = false
+                }
+            } else {
+                Button("OK", role: .cancel) {}
+            }
         } message: {
             Text(errorMessage)
         }
@@ -162,32 +205,18 @@ struct PricingView: View {
 
     @ViewBuilder
     private var fallbackPlansSection: some View {
-        VStack(spacing: 24) {
-            Text("Preview Offleaf Premium")
-                .font(.system(size: 18, weight: .semibold))
-                .foregroundColor(.white)
-                .frame(maxWidth: .infinity, alignment: .leading)
-
-            Text("Sign in to the App Store to unlock purchases. You can still explore each plan below.")
-                .font(.system(size: 14))
-                .foregroundColor(.white.opacity(0.6))
-                .multilineTextAlignment(.leading)
-                .fixedSize(horizontal: false, vertical: true)
-                .frame(maxWidth: .infinity, alignment: .leading)
-
-            VStack(spacing: 20) {
-                ForEach(fallbackPlans) { plan in
-                    StaticSubscriptionCard(
-                        plan: plan,
-                        isSelected: selectedFallbackPlan?.id == plan.id
-                    ) {
-                        selectedFallbackPlan = plan
-                    }
+        VStack(spacing: 14) {
+            ForEach(fallbackPlans) { plan in
+                StaticSubscriptionCard(
+                    plan: plan,
+                    isSelected: selectedFallbackPlan?.id == plan.id
+                ) {
+                    selectedFallbackPlan = plan
                 }
             }
         }
         .padding(.horizontal, 24)
-        .padding(.top, 20)
+        .padding(.top, 4)
         .onAppear {
             if selectedFallbackPlan == nil {
                 selectedFallbackPlan = fallbackPlans.first
@@ -220,6 +249,7 @@ struct PricingView: View {
         }
 
         isPurchasing = true
+        isNetworkError = false
         
         do {
             let success = try await subscriptionManager.purchaseSubscription(product: product)
@@ -229,9 +259,31 @@ struct PricingView: View {
         } catch StoreError.failedVerification {
             errorMessage = "Purchase verification failed. Please try again."
             showError = true
-        } catch {
-            errorMessage = "Purchase failed: \(error.localizedDescription)"
+        } catch let error as NSError where error.domain == NSURLErrorDomain {
+            // Network-specific errors
+            isNetworkError = true
+            switch error.code {
+            case NSURLErrorNotConnectedToInternet:
+                errorMessage = "No internet connection. Please check your connection and try again."
+            case NSURLErrorTimedOut:
+                errorMessage = "Request timed out. Please try again."
+            case NSURLErrorNetworkConnectionLost:
+                errorMessage = "Connection lost. Please try again."
+            default:
+                errorMessage = "Network error. Please check your connection and try again."
+            }
             showError = true
+        } catch {
+            // Check if user cancelled
+            if (error as NSError).domain == "SKErrorDomain" && (error as NSError).code == 2 {
+                // User cancelled (SKError.paymentCancelled) - don't show error
+                errorMessage = ""
+                showError = false
+            } else {
+                // Other errors
+                errorMessage = "Purchase failed: \(error.localizedDescription)"
+                showError = true
+            }
         }
         
         isPurchasing = false

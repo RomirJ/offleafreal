@@ -9,19 +9,18 @@ import SwiftUI
 import UIKit
 
 struct HomeView: View {
+    @StateObject private var streakManager = StreakManager.shared
     @State private var selectedTab = 0
     @AppStorage("userName") private var userName = ""
     @AppStorage("weeklySpending") private var weeklySpending: Double = 0
     @AppStorage("smokeFrequency") private var smokeFrequencyRaw = CannabisUseFrequency.unknown.rawValue
     @AppStorage("quitDate") private var quitDateString = ""
     @AppStorage("justResetCounter") private var justResetCounter = false
-    @AppStorage("checkInStreak") private var checkInStreak = 0
     @AppStorage("checkInDates") private var checkInDatesString = ""
     @AppStorage("lastCheckInDate") private var lastCheckInDateString = ""
     @State private var isEditingName = false
     @State private var tempName = ""
     @FocusState private var isNameFieldFocused: Bool
-    @State private var daysClean = 0
     @State private var timeSaved = "0h"
     @State private var moneySaved = "$0"
     @State private var moneySavedContext = ""
@@ -40,13 +39,45 @@ struct HomeView: View {
     @State private var showResetAnimation = false
     @State private var daysCountTask: Task<Void, Never>? = nil
     
+    // Midnight update timer
+    @State private var midnightTimer: Timer? = nil
+    @State private var currentDate = Date()
+    
+    // Calendar expansion states
+    @State private var calendarExpanded = false
+    @State private var currentMonth = Date()
+    @Namespace private var calendarNamespace
+    
+    // Calendar performance optimization
+    @State private var cachedMonthDates: [Date?] = []
+    @State private var cachedDateCheckStates: [Int: Bool] = [:]
+    @State private var isLoadingCalendar = false
+    
+    // Shared instances for performance
+    private static let sharedCalendar = Calendar.current
+    private static let swipeThreshold: CGFloat = -30
+    
+    // Cached formatters for performance
+    private static let monthYearFormatter: DateFormatter = {
+        let formatter = DateFormatter()
+        formatter.dateFormat = "MMMM yyyy"
+        return formatter
+    }()
+    
+    private static let accessibilityDateFormatter: DateFormatter = {
+        let formatter = DateFormatter()
+        formatter.dateStyle = .medium
+        return formatter
+    }()
+    
     // Calendar data
     let weekDays = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"]
     private static let dayFormatter: DateFormatter = {
         let formatter = DateFormatter()
         formatter.calendar = Calendar(identifier: .gregorian)
         formatter.locale = Locale(identifier: "en_US_POSIX")
-        formatter.timeZone = TimeZone(secondsFromGMT: 0)
+        // Use local timezone for consistency with Calendar.current
+        formatter.timeZone = TimeZone.current
         formatter.dateFormat = "yyyy-MM-dd"
         return formatter
     }()
@@ -80,7 +111,7 @@ struct HomeView: View {
     
     var checkedDays: [Bool] {
         let calendar = Calendar.current
-        let today = calendar.startOfDay(for: Date())
+        let today = calendar.startOfDay(for: currentDate)
         let dates = checkInDateSet
         
         return weekDates.map { date in
@@ -93,7 +124,134 @@ struct HomeView: View {
     
     // Days clean reflects true check-in streak so UI stays consistent with calendar
     var calculatedDaysClean: Int {
-        max(checkInStreak, 0)
+        streakManager.currentStreak
+    }
+    
+    // Month calendar helpers - optimized with caching
+    private func calculateMonthDates() -> [Date?] {
+        let calendar = Self.sharedCalendar
+        let startOfMonth = calendar.dateInterval(of: .month, for: currentMonth)?.start ?? currentMonth
+        guard let range = calendar.range(of: .day, in: .month, for: currentMonth) else {
+            return [] // Return empty array if calendar fails
+        }
+        let numberOfDays = range.count
+        
+        // Get the first day of the month's weekday
+        let firstWeekday = calendar.component(.weekday, from: startOfMonth) - 1 // 0-based
+        
+        // Create array with nil padding for empty days at start of month
+        var dates: [Date?] = Array(repeating: nil, count: firstWeekday)
+        
+        // Add all days of the month
+        for day in 1...numberOfDays {
+            if let date = calendar.date(byAdding: .day, value: day - 1, to: startOfMonth) {
+                dates.append(date)
+            }
+        }
+        
+        // Pad to complete 6 weeks (42 days total) for consistent grid
+        while dates.count < 42 {
+            dates.append(nil)
+        }
+        
+        return dates
+    }
+    
+    private func updateCalendarCache() {
+        isLoadingCalendar = true
+        cachedMonthDates = calculateMonthDates()
+        
+        // Pre-calculate check states for performance
+        cachedDateCheckStates.removeAll()
+        for (index, date) in cachedMonthDates.enumerated() {
+            if let date = date {
+                cachedDateCheckStates[index] = isDateCheckedOptimized(date)
+            }
+        }
+        isLoadingCalendar = false
+    }
+    
+    var monthYearString: String {
+        return Self.monthYearFormatter.string(from: currentMonth)
+    }
+    
+    // Navigation limits
+    var canNavigateToPreviousMonth: Bool {
+        // Allow navigation back to quit date or at most 1 year
+        let calendar = Self.sharedCalendar
+        if let quitDate = ISO8601DateFormatter().date(from: quitDateString) {
+            let quitMonth = calendar.startOfDay(for: quitDate)
+            let currentMonthStart = calendar.startOfDay(for: currentMonth)
+            return currentMonthStart > quitMonth
+        }
+        // If no quit date, limit to 1 year back
+        let oneYearAgo = calendar.date(byAdding: .year, value: -1, to: Date()) ?? Date()
+        return currentMonth > oneYearAgo
+    }
+    
+    var canNavigateToNextMonth: Bool {
+        // Don't allow navigating beyond current month
+        let calendar = Self.sharedCalendar
+        let today = Date()
+        let currentMonthOfToday = calendar.dateInterval(of: .month, for: today)?.start ?? today
+        let selectedMonthStart = calendar.dateInterval(of: .month, for: currentMonth)?.start ?? currentMonth
+        return selectedMonthStart < currentMonthOfToday
+    }
+    
+    // Optimized helper functions with caching
+    func isDateCheckedOptimized(_ date: Date) -> Bool {
+        let calendar = Self.sharedCalendar
+        let dayStart = calendar.startOfDay(for: date)
+        let dayKey = dayFormatter.string(from: dayStart)
+        return checkInDateSet.contains(dayKey)
+    }
+    
+    func isDateCheckedCached(at index: Int) -> Bool {
+        return cachedDateCheckStates[index] ?? false
+    }
+    
+    func isToday(_ date: Date?) -> Bool {
+        guard let date = date else { return false }
+        return Self.sharedCalendar.isDateInToday(date)
+    }
+    
+    func isPastDate(_ date: Date?) -> Bool {
+        guard let date = date else { return false }
+        let calendar = Self.sharedCalendar
+        let today = calendar.startOfDay(for: Date())
+        let dayStart = calendar.startOfDay(for: date)
+        return dayStart < today
+    }
+    
+    func isFutureDate(_ date: Date?) -> Bool {
+        guard let date = date else { return false }
+        let calendar = Self.sharedCalendar
+        let today = calendar.startOfDay(for: currentDate)
+        let dayStart = calendar.startOfDay(for: date)
+        return dayStart > today
+    }
+    
+    // Accessibility helpers
+    func getAccessibilityLabel(for date: Date?, at index: Int) -> String {
+        guard let date = date else { return "Empty" }
+        
+        let dateString = Self.accessibilityDateFormatter.string(from: date)
+        
+        if isToday(date) {
+            if isDateCheckedCached(at: index) {
+                return "\(dateString), Today, Checked in"
+            } else {
+                return "\(dateString), Today, Not checked in"
+            }
+        } else if isPastDate(date) {
+            if isDateCheckedCached(at: index) {
+                return "\(dateString), Checked in"
+            } else {
+                return "\(dateString), Missed"
+            }
+        } else {
+            return "\(dateString), Future date"
+        }
     }
     
     // Calculate money saved
@@ -308,7 +466,6 @@ struct HomeView: View {
             // Delay to ensure view has settled after dismissal
             DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {
                 // Reset to day 0
-                daysClean = 0
                 countedDays = 0
                 
                 // Show reset animation
@@ -412,7 +569,7 @@ struct HomeView: View {
                             HStack(spacing: 4) {
                                 Text("🔥")
                                     .font(.system(size: 20))
-                                Text("\(max(checkInStreak, 0))")
+                                Text("\(streakManager.currentStreak)")
                                     .font(.system(size: 18, weight: .bold))
                                     .foregroundColor(.white)
                             }
@@ -426,68 +583,243 @@ struct HomeView: View {
                     .opacity(showContent ? 1 : 0)
                     .animation(.easeOut(duration: 0.5).delay(0.1), value: showContent)
                     
-                    // Compact Streak Calendar
-                    VStack(alignment: .leading, spacing: 12) {
-                        Text("This week")
-                            .font(.system(size: 14, weight: .semibold))
-                            .foregroundColor(.gray)
-                        
-                        HStack(spacing: 0) {
-                            ForEach(0..<7) { index in
-                                VStack(spacing: 6) {
-                                    ZStack {
-                                        Circle()
-                                            .fill(
-                                                checkedDays[index] ?
-                                                Color(red: 0.3, green: 0.7, blue: 0.4) :
-                                                (index <= todayIndex ? 
-                                                 Color(red: 0.25, green: 0.08, blue: 0.08) :
-                                                 Color(red: 0.1, green: 0.1, blue: 0.1))
-                                            )
-                                            .frame(width: 32, height: 32)
-                                        
-                                        // Today indicator
-                                        if index == todayIndex {
-                                            Circle()
-                                                .stroke(
-                                                    checkedDays[index] ?
-                                                    Color(red: 0.3, green: 0.7, blue: 0.4) :
-                                                    Color(red: 0.8, green: 0.3, blue: 0.3),
-                                                    lineWidth: 2
+                    // Expandable Calendar Section
+                    VStack(spacing: 0) {
+                        if !calendarExpanded {
+                            // Compact Week View
+                            VStack(alignment: .leading, spacing: 12) {
+                                HStack {
+                                    Text("This week")
+                                        .font(.system(size: 14, weight: .semibold))
+                                        .foregroundColor(.gray)
+                                    
+                                    Spacer()
+                                    
+                                    // Hint to tap
+                                    Text("Tap to view month")
+                                        .font(.system(size: 12, weight: .regular))
+                                        .foregroundColor(.gray.opacity(0.5))
+                                }
+                                
+                                HStack(spacing: 0) {
+                                    ForEach(0..<7) { index in
+                                        VStack(spacing: 6) {
+                                            ZStack {
+                                                Circle()
+                                                    .fill(
+                                                        checkedDays[index] ?
+                                                        Color(red: 0.3, green: 0.7, blue: 0.4) :
+                                                        (index == todayIndex ?
+                                                         Color(red: 0.15, green: 0.25, blue: 0.4) : // Blue for today pending
+                                                         (index < todayIndex ? 
+                                                          Color(red: 0.25, green: 0.08, blue: 0.08) : // Red for missed
+                                                          Color(red: 0.1, green: 0.1, blue: 0.1))) // Dark for future
+                                                    )
+                                                    .frame(width: 32, height: 32)
+                                                
+                                                // Today indicator
+                                                if index == todayIndex {
+                                                    Circle()
+                                                        .stroke(
+                                                            checkedDays[index] ?
+                                                            Color(red: 0.3, green: 0.7, blue: 0.4) :
+                                                            Color(red: 0.3, green: 0.5, blue: 0.8), // Blue for pending
+                                                            lineWidth: 2
+                                                        )
+                                                        .frame(width: 36, height: 36)
+                                                }
+                                                
+                                                if checkedDays[index] {
+                                                    Image(systemName: "checkmark")
+                                                        .font(.system(size: 14, weight: .bold))
+                                                        .foregroundColor(.white)
+                                                } else if index == todayIndex {
+                                                    // Today but not checked in yet - show question mark
+                                                    Image(systemName: "questionmark")
+                                                        .font(.system(size: 14, weight: .bold))
+                                                        .foregroundColor(Color(red: 0.3, green: 0.5, blue: 0.8))
+                                                } else if index < todayIndex {
+                                                    // Past days without check-in - show X
+                                                    Image(systemName: "xmark")
+                                                        .font(.system(size: 12, weight: .bold))
+                                                        .foregroundColor(Color(red: 0.9, green: 0.3, blue: 0.3))
+                                                }
+                                            }
+                                            
+                                            Text(weekDays[index].prefix(1))
+                                                .font(.system(size: 10, weight: .medium))
+                                                .foregroundColor(
+                                                    checkedDays[index] ? 
+                                                    .white.opacity(0.7) : 
+                                                    (index == todayIndex ?
+                                                     Color(red: 0.3, green: 0.5, blue: 0.8).opacity(0.8) : // Blue for today
+                                                     (index < todayIndex ? 
+                                                      Color(red: 0.9, green: 0.3, blue: 0.3).opacity(0.6) : // Red for missed
+                                                      .gray.opacity(0.5))) // Gray for future
                                                 )
-                                                .frame(width: 36, height: 36)
-                                                .scaleEffect(floatingAnimation ? 1.1 : 1.0)
-                                                .opacity(floatingAnimation ? 0.6 : 1.0)
-                                                .animation(.easeInOut(duration: 2).repeatForever(autoreverses: true), value: floatingAnimation)
                                         }
-                                        
-                                        if checkedDays[index] {
-                                            Image(systemName: "checkmark")
-                                                .font(.system(size: 14, weight: .bold))
-                                                .foregroundColor(.white)
-                                        } else if index <= todayIndex {
-                                            Image(systemName: "xmark")
-                                                .font(.system(size: 12, weight: .bold))
-                                                .foregroundColor(Color(red: 0.9, green: 0.3, blue: 0.3))
+                                        .frame(maxWidth: .infinity)
+                                        .opacity(index > todayIndex ? 0.5 : 1.0)
+                                    }
+                                }
+                            }
+                            .padding(16)
+                            .contentShape(Rectangle())
+                            .onTapGesture {
+                                // Update cache before expanding
+                                updateCalendarCache()
+                                withAnimation(.spring(response: 0.4, dampingFraction: 0.8)) {
+                                    calendarExpanded = true
+                                }
+                            }
+                        } else {
+                            // Expanded Month View
+                            VStack(spacing: 16) {
+                                // Month navigation header
+                                HStack {
+                                    Button(action: {
+                                        if canNavigateToPreviousMonth {
+                                            withAnimation(.easeInOut(duration: 0.3)) {
+                                                currentMonth = Calendar.current.date(byAdding: .month, value: -1, to: currentMonth) ?? currentMonth
+                                                updateCalendarCache()
+                                            }
+                                        }
+                                    }) {
+                                        Image(systemName: "chevron.left")
+                                            .font(.system(size: 16, weight: .semibold))
+                                            .foregroundColor(canNavigateToPreviousMonth ? .white.opacity(0.7) : .white.opacity(0.2))
+                                            .scaleEffect(canNavigateToPreviousMonth ? 1.0 : 0.9)
+                                    }
+                                    .disabled(!canNavigateToPreviousMonth)
+                                    
+                                    Spacer()
+                                    
+                                    Text(monthYearString)
+                                        .font(.system(size: 18, weight: .bold))
+                                        .foregroundColor(.white)
+                                    
+                                    Spacer()
+                                    
+                                    Button(action: {
+                                        if canNavigateToNextMonth {
+                                            withAnimation(.easeInOut(duration: 0.3)) {
+                                                currentMonth = Calendar.current.date(byAdding: .month, value: 1, to: currentMonth) ?? currentMonth
+                                                updateCalendarCache()
+                                            }
+                                        }
+                                    }) {
+                                        Image(systemName: "chevron.right")
+                                            .font(.system(size: 16, weight: .semibold))
+                                            .foregroundColor(canNavigateToNextMonth ? .white.opacity(0.7) : .white.opacity(0.2))
+                                            .scaleEffect(canNavigateToNextMonth ? 1.0 : 0.9)
+                                    }
+                                    .disabled(!canNavigateToNextMonth)
+                                }
+                                
+                                // Week day headers
+                                HStack(spacing: 0) {
+                                    ForEach(weekDays, id: \.self) { day in
+                                        Text(day.prefix(3))
+                                            .font(.system(size: 12, weight: .semibold))
+                                            .foregroundColor(.gray)
+                                            .frame(maxWidth: .infinity)
+                                    }
+                                }
+                                
+                                // Month grid with optimized rendering
+                                if isLoadingCalendar {
+                                    ProgressView()
+                                        .progressViewStyle(CircularProgressViewStyle(tint: .white))
+                                        .frame(height: 200)
+                                } else {
+                                    LazyVGrid(columns: Array(repeating: GridItem(.flexible(), spacing: 8), count: 7), spacing: 12) {
+                                        ForEach(0..<42, id: \.self) { index in
+                                            let date = cachedMonthDates.indices.contains(index) ? cachedMonthDates[index] : nil
+                                            
+                                            ZStack {
+                                                if let date = date {
+                                                    Circle()
+                                                        .fill(
+                                                            isDateCheckedCached(at: index) ?
+                                                            Color(red: 0.3, green: 0.7, blue: 0.4) :
+                                                            (isToday(date) ?
+                                                             Color(red: 0.15, green: 0.25, blue: 0.4) : // Blue for today pending
+                                                             (isPastDate(date) ?
+                                                              Color(red: 0.25, green: 0.08, blue: 0.08) : // Red for missed
+                                                              Color(red: 0.1, green: 0.1, blue: 0.1))) // Dark for future
+                                                        )
+                                                        .frame(width: 36, height: 36)
+                                                
+                                                    // Today indicator - optimized animation
+                                                    if isToday(date) {
+                                                        Circle()
+                                                            .stroke(
+                                                                isDateCheckedCached(at: index) ?
+                                                                Color(red: 0.3, green: 0.7, blue: 0.4) :
+                                                                Color(red: 0.3, green: 0.5, blue: 0.8), // Blue for pending
+                                                                lineWidth: 2
+                                                            )
+                                                            .frame(width: 40, height: 40)
+                                                    }
+                                                    
+                                                    if isDateCheckedCached(at: index) {
+                                                        Image(systemName: "checkmark")
+                                                            .font(.system(size: 14, weight: .bold))
+                                                            .foregroundColor(.white)
+                                                    } else if isToday(date) {
+                                                        // Today but not checked in yet - show question mark
+                                                        Image(systemName: "questionmark")
+                                                            .font(.system(size: 14, weight: .bold))
+                                                            .foregroundColor(Color(red: 0.3, green: 0.5, blue: 0.8))
+                                                    } else if isPastDate(date) {
+                                                        Image(systemName: "xmark")
+                                                            .font(.system(size: 12, weight: .bold))
+                                                            .foregroundColor(Color(red: 0.9, green: 0.3, blue: 0.3))
+                                                    } else {
+                                                        Text("\(Self.sharedCalendar.component(.day, from: date))")
+                                                            .font(.system(size: 14, weight: .medium))
+                                                            .foregroundColor(
+                                                                isFutureDate(date) ? .gray.opacity(0.3) : .white.opacity(0.7)
+                                                            )
+                                                    }
+                                                } else {
+                                                    Color.clear
+                                                        .frame(width: 36, height: 36)
+                                                }
+                                            }
+                                            .opacity(isFutureDate(date) ? 0.5 : 1.0)
+                                            .accessibilityLabel(getAccessibilityLabel(for: date, at: index))
+                                            .accessibilityAddTraits(isToday(date) ? .isSelected : [])
                                         }
                                     }
-                                    
-                                    Text(weekDays[index].prefix(1))
-                                        .font(.system(size: 10, weight: .medium))
-                                        .foregroundColor(
-                                            checkedDays[index] ? 
-                                            .white.opacity(0.7) : 
-                                            (index <= todayIndex ? 
-                                             Color(red: 0.9, green: 0.3, blue: 0.3).opacity(0.6) :
-                                             .gray.opacity(0.5))
-                                        )
                                 }
-                                .frame(maxWidth: .infinity)
-                                .opacity(index > todayIndex ? 0.5 : 1.0)
+                                
+                                // Collapse hint
+                                HStack {
+                                    Spacer()
+                                    Image(systemName: "chevron.compact.up")
+                                        .font(.system(size: 20, weight: .medium))
+                                        .foregroundColor(.gray.opacity(0.4))
+                                    Text("Swipe up to collapse")
+                                        .font(.system(size: 12, weight: .regular))
+                                        .foregroundColor(.gray.opacity(0.4))
+                                    Spacer()
+                                }
+                                .padding(.top, 8)
                             }
+                            .padding(16)
+                            .gesture(
+                                DragGesture()
+                                    .onEnded { value in
+                                        if value.translation.height < Self.swipeThreshold {
+                                            withAnimation(.spring(response: 0.4, dampingFraction: 0.8)) {
+                                                calendarExpanded = false
+                                            }
+                                        }
+                                    }
+                            )
                         }
                     }
-                    .padding(16)
                     .background(
                         RoundedRectangle(cornerRadius: 20)
                             .fill(Color(red: 0.06, green: 0.08, blue: 0.06))
@@ -725,16 +1057,28 @@ struct HomeView: View {
             }
             
             // Update values
-            daysClean = calculatedDaysClean
-            animateDaysClean(to: calculatedDaysClean)
+            animateDaysClean(to: streakManager.currentStreak)
+            
+            // Initialize calendar cache
+            updateCalendarCache()
         }
-        .onChange(of: checkInStreak) { oldValue, newValue in
-            daysClean = max(newValue, 0)
+        .onChange(of: streakManager.currentStreak) { oldValue, newValue in
             animateDaysClean(to: newValue)
+        }
+        .onChange(of: checkInDatesString) { _, _ in
+            // Update cache when check-in dates change
+            if calendarExpanded {
+                updateCalendarCache()
+            }
         }
         .onDisappear {
             daysCountTask?.cancel()
             daysCountTask = nil
+            midnightTimer?.invalidate()
+            midnightTimer = nil
+        }
+        .task {
+            setupMidnightTimer()
         }
     }
     private func animateDaysClean(to target: Int) {
@@ -769,9 +1113,7 @@ struct HomeView: View {
     private func reconcileStreakIfNeeded() {
         // Reset streak if no check-in date exists
         guard !lastCheckInDateString.isEmpty else {
-            if checkInStreak != 0 {
-                checkInStreak = 0
-            }
+            streakManager.validateStreak()
             return
         }
 
@@ -779,7 +1121,7 @@ struct HomeView: View {
         // Validate date format
         guard let lastDate = formatter.date(from: lastCheckInDateString) else {
             // Invalid date format - reset streak for safety
-            checkInStreak = 0
+            streakManager.validateStreak()
             return
         }
 
@@ -792,9 +1134,36 @@ struct HomeView: View {
         // This is more forgiving for users who might miss a single day
         let gracePeriodDays = 2 // User has up to 2 days to check in
         
-        if delta > gracePeriodDays && checkInStreak != 0 {
+        if delta > gracePeriodDays {
             // Streak breaks after missing more than 1 day
-            checkInStreak = 0
+            streakManager.validateStreak()
+        }
+    }
+    
+    private func setupMidnightTimer() {
+        // Cancel any existing timer
+        midnightTimer?.invalidate()
+        
+        // Calculate seconds until midnight
+        let calendar = Calendar.current
+        let now = Date()
+        guard let tomorrow = calendar.date(byAdding: .day, value: 1, to: now) else { return }
+        let midnight = calendar.startOfDay(for: tomorrow)
+        
+        let secondsUntilMidnight = midnight.timeIntervalSince(now)
+        
+        // Set timer to fire at midnight
+        midnightTimer = Timer.scheduledTimer(withTimeInterval: secondsUntilMidnight, repeats: false) { _ in
+            // Update current date to trigger view refresh
+            withAnimation {
+                currentDate = Date()
+            }
+            
+            // Check and update streak status
+            streakManager.validateStreak()
+            
+            // Setup timer for next midnight
+            setupMidnightTimer()
         }
     }
 }
@@ -804,48 +1173,50 @@ struct HeroOrbView: View {
     @Binding var animating: Bool
     
     var body: some View {
-        ZStack {
-            // HUGE vibrant orb like Quittr
-            Circle()
-                .fill(
-                    RadialGradient(
-                        colors: [
-                            Color(red: 1.0, green: 0.8, blue: 0.3),  // Bright gold
-                            Color(red: 0.95, green: 0.6, blue: 0.2), // Orange
-                            Color(red: 0.9, green: 0.4, blue: 0.25), // Deep orange
-                            Color(red: 0.85, green: 0.3, blue: 0.3).opacity(0.8), // Pink-red
-                            Color.clear
-                        ],
-                        center: .center,
-                        startRadius: 30,
-                        endRadius: 200
+        GeometryReader { geometry in
+            ZStack {
+                // HUGE vibrant orb like Quittr
+                Circle()
+                    .fill(
+                        RadialGradient(
+                            colors: [
+                                Color(red: 1.0, green: 0.8, blue: 0.3),  // Bright gold
+                                Color(red: 0.95, green: 0.6, blue: 0.2), // Orange
+                                Color(red: 0.9, green: 0.4, blue: 0.25), // Deep orange
+                                Color(red: 0.85, green: 0.3, blue: 0.3).opacity(0.8), // Pink-red
+                                Color.clear
+                            ],
+                            center: .center,
+                            startRadius: 30,
+                            endRadius: 200
+                        )
                     )
-                )
-                .frame(width: 420, height: 420)
-                .blur(radius: 20)
-                .opacity(0.5) // High opacity for vibrancy
-                .position(x: UIScreen.main.bounds.width - 100, y: 150)
-                .rotationEffect(.degrees(animating ? 360 : 0))
-                .animation(.linear(duration: 90).repeatForever(autoreverses: false), value: animating)
-            
-            // Inner glow for more vibrancy
-            Circle()
-                .fill(
-                    RadialGradient(
-                        colors: [
-                            Color(red: 1.0, green: 0.9, blue: 0.5).opacity(0.4),
-                            Color.clear
-                        ],
-                        center: .center,
-                        startRadius: 10,
-                        endRadius: 120
+                    .frame(width: min(420, geometry.size.width * 0.9), height: min(420, geometry.size.width * 0.9))
+                    .blur(radius: 20)
+                    .opacity(0.5) // High opacity for vibrancy
+                    .position(x: geometry.size.width * 0.75, y: geometry.size.height * 0.2)
+                    .rotationEffect(.degrees(animating ? 360 : 0))
+                    .animation(.linear(duration: 90).repeatForever(autoreverses: false), value: animating)
+                
+                // Inner glow for more vibrancy
+                Circle()
+                    .fill(
+                        RadialGradient(
+                            colors: [
+                                Color(red: 1.0, green: 0.9, blue: 0.5).opacity(0.4),
+                                Color.clear
+                            ],
+                            center: .center,
+                            startRadius: 10,
+                            endRadius: 120
+                        )
                     )
-                )
-                .frame(width: 250, height: 250)
-                .blur(radius: 15)
-                .position(x: UIScreen.main.bounds.width - 100, y: 150)
-                .scaleEffect(animating ? 1.1 : 0.9)
-                .animation(.easeInOut(duration: 4).repeatForever(autoreverses: true), value: animating)
+                    .frame(width: min(250, geometry.size.width * 0.6), height: min(250, geometry.size.width * 0.6))
+                    .blur(radius: 15)
+                    .position(x: geometry.size.width * 0.75, y: geometry.size.height * 0.2)
+                    .scaleEffect(animating ? 1.1 : 0.9)
+                    .animation(.easeInOut(duration: 4).repeatForever(autoreverses: true), value: animating)
+            }
         }
     }
 }
@@ -1387,7 +1758,8 @@ struct AchievementBadge: View {
             // Icon bounce for unlocked achievements
             if isUnlocked && !isCurrent {
                 let interval = Double.random(in: 5...8)
-                bounceTimer = Timer.scheduledTimer(withTimeInterval: interval, repeats: true) { _ in
+                bounceTimer = Timer.scheduledTimer(withTimeInterval: interval, repeats: true) { [weak bounceTimer] _ in
+                    guard bounceTimer != nil else { return }
                     withAnimation(.spring(response: 0.3, dampingFraction: 0.5)) {
                         iconBounce = true
                     }
@@ -1595,6 +1967,7 @@ struct ResetAnimationView: View {
     @State private var plantGrowth = 0.0
     @State private var leafParticles: [LeafParticle] = []
     @State private var glowOpacity = 0.0
+    @State private var screenSize = CGSize.zero
     
     let messages = [
         "It's okay to start over",
@@ -1612,11 +1985,12 @@ struct ResetAnimationView: View {
     }
     
     var body: some View {
-        ZStack {
-            // Background with gradient
-            Color.black
-                .ignoresSafeArea()
-                .opacity(0.95)
+        GeometryReader { geometry in
+            ZStack {
+                // Background with gradient
+                Color.black
+                    .ignoresSafeArea()
+                    .opacity(0.95)
             
             // Falling leaves effect
             ForEach(leafParticles) { leaf in
@@ -1694,9 +2068,11 @@ struct ResetAnimationView: View {
                     }
                 }
             }
-        }
-        .onAppear {
-            startAnimation()
+            }
+            .onAppear {
+                screenSize = geometry.size
+                startAnimation()
+            }
         }
     }
     
@@ -1705,7 +2081,7 @@ struct ResetAnimationView: View {
         for i in 0..<8 {
             DispatchQueue.main.asyncAfter(deadline: .now() + Double(i) * 0.1) {
                 let leaf = LeafParticle(
-                    x: CGFloat.random(in: 50...UIScreen.main.bounds.width - 50),
+                    x: CGFloat.random(in: 50...max(screenSize.width - 50, 100)),
                     y: -50,
                     rotation: Double.random(in: 0...360),
                     scale: CGFloat.random(in: 0.6...1.2),
@@ -1716,7 +2092,7 @@ struct ResetAnimationView: View {
                 // Animate leaf falling
                 withAnimation(.easeIn(duration: 2.5)) {
                     if let index = leafParticles.firstIndex(where: { $0.id == leaf.id }) {
-                        leafParticles[index].y = UIScreen.main.bounds.height + 100
+                        leafParticles[index].y = screenSize.height + 100
                         leafParticles[index].rotation += Double.random(in: 180...540)
                         leafParticles[index].opacity = 0
                     }

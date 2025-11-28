@@ -179,8 +179,14 @@ struct MyReasonsView: View {
     }
     
     private func loadReasons() {
-        if let savedReasons = UserDefaults.standard.array(forKey: "userQuitReasons") as? [String] {
+        // Load from secure storage first
+        if let savedReasons = SecureHealthDataStore.shared.loadSecureData([String].self, for: "userQuitReasons") {
             reasons = savedReasons
+        } else if let savedReasons = UserDefaults.standard.array(forKey: "userQuitReasons") as? [String] {
+            // Migrate from UserDefaults if exists
+            reasons = savedReasons
+            _ = SecureHealthDataStore.shared.saveSecureData(savedReasons, for: "userQuitReasons")
+            UserDefaults.standard.removeObject(forKey: "userQuitReasons")
         }
     }
     
@@ -188,7 +194,7 @@ struct MyReasonsView: View {
         guard !newReason.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else { return }
         
         reasons.append(newReason)
-        UserDefaults.standard.set(reasons, forKey: "userQuitReasons")
+        _ = SecureHealthDataStore.shared.saveSecureData(reasons, for: "userQuitReasons")
         
         newReason = ""
         showingAddReason = false
@@ -197,7 +203,7 @@ struct MyReasonsView: View {
     
     private func removeReason(at index: Int) {
         reasons.remove(at: index)
-        UserDefaults.standard.set(reasons, forKey: "userQuitReasons")
+        _ = SecureHealthDataStore.shared.saveSecureData(reasons, for: "userQuitReasons")
     }
 }
 

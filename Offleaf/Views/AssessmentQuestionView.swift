@@ -348,14 +348,29 @@ private extension AssessmentQuestion3View {
     func sanitizedAmount(_ value: String) -> String {
         var result = ""
         var hasSeparator = false
+        var decimalPlaces = 0
+        
         for character in value {
             if character.isWholeNumber {
-                result.append(character)
+                if hasSeparator {
+                    decimalPlaces += 1
+                    if decimalPlaces <= 2 { // Limit to 2 decimal places for currency
+                        result.append(character)
+                    }
+                } else {
+                    result.append(character)
+                }
             } else if String(character) == decimalSeparator && !hasSeparator {
                 hasSeparator = true
                 result.append(character)
             }
         }
+        
+        // Validate the amount is within reasonable range (max $5000/week)
+        if let amount = Double(result), amount > 5000 {
+            return "5000"
+        }
+        
         return result
     }
 }

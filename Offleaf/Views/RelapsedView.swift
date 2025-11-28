@@ -8,12 +8,9 @@
 import SwiftUI
 
 struct RelapsedView: View {
+    @StateObject private var streakManager = StreakManager.shared
     @Environment(\.dismiss) var dismiss
     @AppStorage("quitDate") private var quitDateString = ""
-    @AppStorage("daysClean") private var daysClean = 0
-    @AppStorage("checkInStreak") private var checkInStreak = 0
-    @AppStorage("longestCheckInStreak") private var longestCheckInStreak = 0
-    @AppStorage("totalCheckInDays") private var totalCheckInDays = 0
     @AppStorage("checkInDates") private var checkInDatesString = ""
     @AppStorage("lastCheckInDate") private var lastCheckInDateString = ""
     @State private var showingJournal = false
@@ -191,10 +188,7 @@ struct RelapsedView: View {
         // Reset the quit date to now
         let formatter = ISO8601DateFormatter()
         quitDateString = formatter.string(from: Date())
-        daysClean = 0
-        checkInStreak = 0
-        longestCheckInStreak = 0
-        totalCheckInDays = 0
+        streakManager.resetStreak()
         checkInDatesString = ""
         lastCheckInDateString = ""
         DailyCheckInStore.clear()

@@ -23,7 +23,10 @@ struct WelcomeScreenView: View {
                 
                 VStack(spacing: 0) {
                     VStack(spacing: 20) {
-                        LeafLogoView(size: 140)
+                        Image("LeafLogo")
+                            .resizable()
+                            .aspectRatio(contentMode: .fit)
+                            .frame(width: 180, height: 180)
                             .opacity(showLogo ? 1 : 0)
                             .scaleEffect(showLogo ? 1 : 0.6)
                             .offset(y: moveLogoUp ? 0 : geometry.size.height * 0.18)
