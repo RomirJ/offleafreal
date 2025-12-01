@@ -44,7 +44,13 @@ struct CheckInCompletionView: View {
                 HStack {
                     Spacer()
                     
-                    Button(action: { dismiss() }) {
+                    Button(action: { 
+                        if let onDismiss = onDismiss {
+                            onDismiss()
+                        } else {
+                            dismiss()
+                        }
+                    }) {
                         ZStack {
                             Circle()
                                 .fill(Color.white.opacity(0.1))

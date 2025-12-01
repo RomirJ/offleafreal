@@ -35,9 +35,11 @@ struct HomeView: View {
     @State private var animateGradient = false
     @State private var showContent = false
     @State private var countedDays = 0
-    @State private var floatingAnimation = false
     @State private var showResetAnimation = false
     @State private var daysCountTask: Task<Void, Never>? = nil
+    
+    // Refresh states
+    @State private var isRefreshing = false
     
     // Midnight update timer
     @State private var midnightTimer: Timer? = nil
@@ -125,6 +127,12 @@ struct HomeView: View {
     // Days clean reflects true check-in streak so UI stays consistent with calendar
     var calculatedDaysClean: Int {
         streakManager.currentStreak
+    }
+    
+    // Total days clean across all time (for cumulative stats)
+    var totalDaysClean: Int {
+        // Count all unique check-in dates
+        checkInDateSet.count
     }
     
     // Month calendar helpers - optimized with caching
@@ -261,7 +269,8 @@ struct HomeView: View {
         let effectiveSpending = weeklySpending > 0 ? weeklySpending : baselineWeeklySpending
         
         let dailySpending = effectiveSpending / 7.0
-        let totalSaved = dailySpending * Double(calculatedDaysClean)
+        // Use TOTAL days clean for cumulative savings
+        let totalSaved = dailySpending * Double(totalDaysClean)
         
         // Format the money
         let formatter = NumberFormatter()
@@ -313,7 +322,8 @@ struct HomeView: View {
     var calculatedTimeSaved: (amount: String, context: String, fullDisplay: String, metaphor: String) {
         // Calculate hours per day based on frequency
         let frequency = CannabisUseFrequency(storedValue: smokeFrequencyRaw)
-        let totalHours = frequency.estimatedHoursPerDay * Double(calculatedDaysClean)
+        // Use TOTAL days clean for cumulative time saved
+        let totalHours = frequency.estimatedHoursPerDay * Double(totalDaysClean)
         
         // Create display formats
         let amount: String
@@ -380,8 +390,9 @@ struct HomeView: View {
         
         // Convert to joints (0.5g per joint average)
         let jointsPerDay = gramsPerDay / 0.5
-        let totalJoints = Int(jointsPerDay * Double(calculatedDaysClean))
-        let totalGrams = gramsPerDay * Double(calculatedDaysClean)
+        // Use TOTAL days clean for cumulative consumption avoided
+        let totalJoints = Int(jointsPerDay * Double(totalDaysClean))
+        let totalGrams = gramsPerDay * Double(totalDaysClean)
         
         // Format the output
         let amount: String
@@ -428,25 +439,37 @@ struct HomeView: View {
     
     var body: some View {
         ZStack(alignment: .bottom) {
-            // Content based on selected tab
-            Group {
-                switch selectedTab {
-                case 0:
-                    homeContent
-                case 1:
-                    LearnView()
-                case 2:
-                    ProgressTabView()
-                case 3:
-                    ProfileView()
-                default:
-                    homeContent
+            // Content based on selected tab with smooth transitions
+            ZStack {
+                Color.black // Base black layer
+                    .ignoresSafeArea()
+                
+                TabContentView(selectedTab: selectedTab) {
+                    Group {
+                        switch selectedTab {
+                        case 0:
+                            homeContent
+                                .background(Color.black)
+                        case 1:
+                            LearnView()
+                                .background(Color.black)
+                        case 2:
+                            ProgressTabView()
+                                .background(Color.black)
+                        case 3:
+                            ProfileView()
+                                .background(Color.black)
+                        default:
+                            homeContent
+                                .background(Color.black)
+                        }
+                    }
                 }
             }
             .frame(maxWidth: .infinity, maxHeight: .infinity)
             
             // Bottom stack with emergency button and tab bar
-            VStack(spacing: 16) {
+            VStack(spacing: 12) {
                 // Floating Emergency Button
                 EmergencyHelpButton()
                     .padding(.horizontal, 20)
@@ -459,6 +482,29 @@ struct HomeView: View {
             // Reset Animation Overlay - Plant rebirth theme
             if showResetAnimation {
                 ResetAnimationView(isShowing: $showResetAnimation)
+            }
+            
+            // Refresh Animation Overlay - Above everything
+            if isRefreshing {
+                VStack {
+                    RefreshAnimationView()
+                        .padding()
+                        .background(
+                            RoundedRectangle(cornerRadius: 20)
+                                .fill(Color.black.opacity(0.95))
+                                .shadow(radius: 10)
+                        )
+                        .padding(.horizontal, 20)
+                        .padding(.top, 60)
+                    
+                    Spacer()
+                }
+                .zIndex(200) // Higher than tab bar
+                .allowsHitTesting(false)
+                .transition(.asymmetric(
+                    insertion: .move(edge: .top).combined(with: .opacity),
+                    removal: .move(edge: .top).combined(with: .opacity)
+                ))
             }
         }
         .ignoresSafeArea(.keyboard)
@@ -487,22 +533,24 @@ struct HomeView: View {
     
     var homeContent: some View {
         ZStack {
-            // Pure black background
-            Color.black
+            // Animated background with particles and breathing gradients
+            AnimatedBackgroundView()
                 .ignoresSafeArea()
             
-            // Huge vibrant orb like Quittr
-            HeroOrbView(animating: $floatingAnimation)
-                .ignoresSafeArea()
-            
-            ScrollView(showsIndicators: false) {
-                VStack(spacing: 24) {
-                    // Header with Achievement Badge
-                    VStack(spacing: 20) {
+            ZStack(alignment: .top) {
+                ScrollView(showsIndicators: false) {
+                    VStack(spacing: 16) { // Reduced from 24 to compress vertical spacing
+                        // Spacer for refresh animation
+                        Color.clear
+                            .frame(height: isRefreshing ? 140 : 0)
+                            .animation(.spring(response: 0.5, dampingFraction: 0.8), value: isRefreshing)
+                        
+                        // Header with Achievement Badge
+                    VStack(spacing: 8) { // Reduced spacing to move content up // Reduced from 20 to compress spacing
                         // Welcome
                         HStack {
                             HStack(spacing: 10) {
-                                LeafLogoView(size: 32)
+                                LeafLogoView(size: 44)
                                 
                                 if isEditingName {
                                     // Inline text field
@@ -567,8 +615,7 @@ struct HomeView: View {
                             
                             // Streak flame
                             HStack(spacing: 4) {
-                                Text("🔥")
-                                    .font(.system(size: 20))
+                                FlameView()
                                 Text("\(streakManager.currentStreak)")
                                     .font(.system(size: 18, weight: .bold))
                                     .foregroundColor(.white)
@@ -579,9 +626,49 @@ struct HomeView: View {
                         AchievementCarousel(daysClean: calculatedDaysClean, showContent: showContent)
                     }
                     .padding(.horizontal, 20)
-                    .padding(.top, 50)
+                    .padding(.top, 10) // Reduced from 50 to move content up
                     .opacity(showContent ? 1 : 0)
                     .animation(.easeOut(duration: 0.5).delay(0.1), value: showContent)
+                    
+                    // Daily Check-In Button - Between Achievement and Calendar
+                    Button(action: { showingDailyCheckIn = true }) {
+                        HStack {
+                            Image(systemName: "checkmark.circle.fill")
+                                .font(.system(size: 20, weight: .semibold))
+                                .foregroundColor(.white)
+                            
+                            Text("Daily Check-In")
+                                .font(.system(size: 18, weight: .semibold))
+                                .foregroundColor(.white)
+                            
+                            Spacer()
+                            
+                            Image(systemName: "arrow.right")
+                                .font(.system(size: 14))
+                                .foregroundColor(.white.opacity(0.6))
+                        }
+                        .padding(.horizontal, 24)
+                        .frame(height: 60)
+                        .background(
+                            RoundedRectangle(cornerRadius: 30)
+                                .fill(
+                                    LinearGradient(
+                                        colors: [
+                                            Color(red: 0.2, green: 0.7, blue: 0.4),
+                                            Color(red: 0.15, green: 0.6, blue: 0.35)
+                                        ],
+                                        startPoint: .leading,
+                                        endPoint: .trailing
+                                    )
+                                )
+                        )
+                        .shadow(color: Color(red: 0.2, green: 0.7, blue: 0.4).opacity(0.3), radius: 10, y: 4)
+                    }
+                    .padding(.horizontal, 20)
+                    .padding(.top, 2) // Reduced from 4
+                    .padding(.bottom, 4) // Reduced from 8
+                    .opacity(showContent ? 1 : 0)
+                    .animation(.easeOut(duration: 0.5).delay(0.2), value: showContent)
                     
                     // Expandable Calendar Section
                     VStack(spacing: 0) {
@@ -663,7 +750,8 @@ struct HomeView: View {
                                     }
                                 }
                             }
-                            .padding(16)
+                            .padding(.horizontal, 16)
+                            .padding(.vertical, 12)
                             .contentShape(Rectangle())
                             .onTapGesture {
                                 // Update cache before expanding
@@ -833,7 +921,7 @@ struct HomeView: View {
                     .animation(.easeOut(duration: 0.5).delay(0.3), value: showContent)
                     
                     // Days Counter Card
-                    VStack(spacing: 12) {
+                    VStack(spacing: 8) { // Reduced spacing to move content up
                         Text("\(countedDays)")
                             .font(.system(size: 80, weight: .bold, design: .rounded))
                             .foregroundColor(.white)
@@ -845,7 +933,7 @@ struct HomeView: View {
                             .foregroundColor(.white.opacity(0.9))
                     }
                     .frame(maxWidth: .infinity)
-                    .padding(.vertical, 32)
+                    .padding(.vertical, 20) // Reduced from 32 to move content up
                     .background(
                         RoundedRectangle(cornerRadius: 28)
                             .fill(Color.white.opacity(0.05))
@@ -859,7 +947,7 @@ struct HomeView: View {
                     .animation(.easeOut(duration: 0.5).delay(0.2), value: showContent)
                     
                     // Milestones with progress bar
-                    VStack(spacing: 12) {
+                    VStack(spacing: 8) { // Reduced spacing to move content up
                         HStack {
                             Text("Milestones")
                                 .font(.system(size: 14, weight: .semibold))
@@ -914,7 +1002,7 @@ struct HomeView: View {
                     .animation(.easeOut(duration: 0.5).delay(0.4), value: showContent)
                     
                     // Stats Cards with Clear Labels  
-                    VStack(spacing: 12) {
+                    VStack(spacing: 8) { // Reduced spacing to move content up
                         // Time Reclaimed Card
                         InteractiveStatCard(
                             icon: "clock.fill",
@@ -949,50 +1037,12 @@ struct HomeView: View {
                     .opacity(showContent ? 1 : 0)
                     .animation(.easeOut(duration: 0.5).delay(0.4), value: showContent)
                     
-                    // Action Buttons - Part of Content
-                    VStack(spacing: 12) {
-                        // Daily Check-In Button
-                        Button(action: { showingDailyCheckIn = true }) {
-                            HStack {
-                                Image(systemName: "checkmark.circle.fill")
-                                    .font(.system(size: 20, weight: .semibold))
-                                    .foregroundColor(.white)
-                                
-                                Text("Daily Check-In")
-                                    .font(.system(size: 18, weight: .semibold))
-                                    .foregroundColor(.white)
-                                
-                                Spacer()
-                                
-                                Image(systemName: "arrow.right")
-                                    .font(.system(size: 14))
-                                    .foregroundColor(.white.opacity(0.6))
-                            }
-                            .padding(.horizontal, 24)
-                            .frame(height: 60)
-                            .background(
-                                RoundedRectangle(cornerRadius: 30)
-                                    .fill(
-                                        LinearGradient(
-                                            colors: [
-                                                Color(red: 0.2, green: 0.7, blue: 0.4),
-                                                Color(red: 0.15, green: 0.6, blue: 0.35)
-                                            ],
-                                            startPoint: .leading,
-                                            endPoint: .trailing
-                                        )
-                                    )
-                            )
-                            .shadow(color: Color(red: 0.2, green: 0.7, blue: 0.4).opacity(0.3), radius: 10, y: 4)
-                        }
-                        
-                        // Quick Actions
-                        HStack(spacing: 8) {
-                            QuickActionPill(icon: "wind", text: "Breathe", action: { showingBreathe = true })
-                            QuickActionPill(icon: "book.fill", text: "Journal", action: { showingJournal = true })
-                            QuickActionPill(icon: "phone.fill", text: "Call", action: { showingContacts = true })
-                            QuickActionPill(icon: "lightbulb.fill", text: "Tips", action: { showingTips = true })
-                        }
+                    // Quick Actions - Part of Content
+                    HStack(spacing: 8) {
+                        QuickActionPill(icon: "wind", text: "Breathe", action: { showingBreathe = true })
+                        QuickActionPill(icon: "book.fill", text: "Journal", action: { showingJournal = true })
+                        QuickActionPill(icon: "phone.fill", text: "Call", action: { showingContacts = true })
+                        QuickActionPill(icon: "lightbulb.fill", text: "Tips", action: { showingTips = true })
                     }
                     .padding(.horizontal, 20)
                     .padding(.top, 8)
@@ -1000,10 +1050,18 @@ struct HomeView: View {
                     .animation(.easeOut(duration: 0.5).delay(0.5), value: showContent)
                     
                     // Extra padding to account for floating emergency button and tab bar
+                    // Emergency button: 56 height + 20 padding + 12 spacing = 88
+                    // Tab bar: 65 height + 20 bottom padding = 85  
+                    // Total needed: ~173, adding extra for safe scrolling
                     Spacer(minLength: 180)
                 }
             }
-        }
+            .refreshable {
+                await performRefresh()
+            }
+            
+            } // Close the ZStack(alignment: .top)
+        } // Close the main ZStack
         .ignoresSafeArea(.container, edges: .bottom)
         .fullScreenCover(isPresented: $showingDailyCheckIn) {
             DailyCheckInView()
@@ -1053,11 +1111,18 @@ struct HomeView: View {
             withAnimation(.easeOut(duration: 0.5)) {
                 animateGradient = true
                 showContent = true
-                floatingAnimation = true
             }
             
-            // Update values
-            animateDaysClean(to: streakManager.currentStreak)
+            // Force update the displayed days to match current streak
+            // This ensures the counter always shows the correct value
+            let currentStreakValue = streakManager.currentStreak
+            if countedDays != currentStreakValue {
+                // If there's a mismatch, update immediately without animation
+                countedDays = currentStreakValue
+            }
+            
+            // Then animate if needed for visual effect
+            animateDaysClean(to: currentStreakValue)
             
             // Initialize calendar cache
             updateCalendarCache()
@@ -1071,6 +1136,13 @@ struct HomeView: View {
                 updateCalendarCache()
             }
         }
+        .onReceive(NotificationCenter.default.publisher(for: UIApplication.didBecomeActiveNotification)) { _ in
+            // Update when app becomes active to ensure display is always current
+            let currentStreakValue = streakManager.currentStreak
+            if countedDays != currentStreakValue {
+                countedDays = currentStreakValue
+            }
+        }
         .onDisappear {
             daysCountTask?.cancel()
             daysCountTask = nil
@@ -1081,6 +1153,47 @@ struct HomeView: View {
             setupMidnightTimer()
         }
     }
+    private func performRefresh() async {
+        // Haptic feedback
+        let impactFeedback = UIImpactFeedbackGenerator(style: .light)
+        impactFeedback.impactOccurred()
+        
+        // Mark as refreshing with smooth animation
+        await MainActor.run {
+            print("DEBUG: Setting isRefreshing to true")
+            withAnimation(.spring(response: 0.5, dampingFraction: 0.8)) {
+                isRefreshing = true
+            }
+        }
+        
+        // Refresh data
+        streakManager.validateStreak()
+        reconcileStreakIfNeeded()
+        
+        // Update displayed days
+        let currentStreakValue = streakManager.currentStreak
+        if countedDays != currentStreakValue {
+            await MainActor.run {
+                animateDaysClean(to: currentStreakValue)
+            }
+        }
+        
+        // Update calendar cache if expanded
+        if calendarExpanded {
+            updateCalendarCache()
+        }
+        
+        // Simulate minimum refresh time for UX - increased to 3 seconds
+        try? await Task.sleep(nanoseconds: 3_000_000_000) // 3 seconds
+        
+        // Complete refresh with smooth spring animation
+        await MainActor.run {
+            withAnimation(.spring(response: 0.5, dampingFraction: 0.8)) {
+                isRefreshing = false
+            }
+        }
+    }
+    
     private func animateDaysClean(to target: Int) {
         let clampedTarget = max(target, 0)
         if countedDays == clampedTarget { return }
@@ -1162,6 +1275,10 @@ struct HomeView: View {
             // Check and update streak status
             streakManager.validateStreak()
             
+            // Update the displayed counter to match current streak
+            let currentStreakValue = streakManager.currentStreak
+            animateDaysClean(to: currentStreakValue)
+            
             // Setup timer for next midnight
             setupMidnightTimer()
         }
@@ -1169,58 +1286,6 @@ struct HomeView: View {
 }
 
 // New supporting views
-struct HeroOrbView: View {
-    @Binding var animating: Bool
-    
-    var body: some View {
-        GeometryReader { geometry in
-            ZStack {
-                // HUGE vibrant orb like Quittr
-                Circle()
-                    .fill(
-                        RadialGradient(
-                            colors: [
-                                Color(red: 1.0, green: 0.8, blue: 0.3),  // Bright gold
-                                Color(red: 0.95, green: 0.6, blue: 0.2), // Orange
-                                Color(red: 0.9, green: 0.4, blue: 0.25), // Deep orange
-                                Color(red: 0.85, green: 0.3, blue: 0.3).opacity(0.8), // Pink-red
-                                Color.clear
-                            ],
-                            center: .center,
-                            startRadius: 30,
-                            endRadius: 200
-                        )
-                    )
-                    .frame(width: min(420, geometry.size.width * 0.9), height: min(420, geometry.size.width * 0.9))
-                    .blur(radius: 20)
-                    .opacity(0.5) // High opacity for vibrancy
-                    .position(x: geometry.size.width * 0.75, y: geometry.size.height * 0.2)
-                    .rotationEffect(.degrees(animating ? 360 : 0))
-                    .animation(.linear(duration: 90).repeatForever(autoreverses: false), value: animating)
-                
-                // Inner glow for more vibrancy
-                Circle()
-                    .fill(
-                        RadialGradient(
-                            colors: [
-                                Color(red: 1.0, green: 0.9, blue: 0.5).opacity(0.4),
-                                Color.clear
-                            ],
-                            center: .center,
-                            startRadius: 10,
-                            endRadius: 120
-                        )
-                    )
-                    .frame(width: min(250, geometry.size.width * 0.6), height: min(250, geometry.size.width * 0.6))
-                    .blur(radius: 15)
-                    .position(x: geometry.size.width * 0.75, y: geometry.size.height * 0.2)
-                    .scaleEffect(animating ? 1.1 : 0.9)
-                    .animation(.easeInOut(duration: 4).repeatForever(autoreverses: true), value: animating)
-            }
-        }
-    }
-}
-
 struct QuickActionPill: View {
     let icon: String
     let text: String
@@ -1311,7 +1376,16 @@ struct Achievement: Identifiable {
     let description: String
 }
 
-// Preference key for tracking scroll position
+// Preference key for tracking ScrollView offset
+struct ScrollViewOffsetPreferenceKey: PreferenceKey {
+    static var defaultValue: CGFloat = 0
+    
+    static func reduce(value: inout CGFloat, nextValue: () -> CGFloat) {
+        value = nextValue()
+    }
+}
+
+// Preference key for tracking scroll position in achievement carousel
 struct ScrollOffsetPreferenceKey: PreferenceKey {
     static var defaultValue: [Int: CGFloat] = [:]
     
@@ -2162,6 +2236,535 @@ struct ResetAnimationView: View {
                 UserDefaults.standard.set(false, forKey: "justResetCounter")
             }
         }
+    }
+}
+
+// Animated flame component
+struct FlameView: View {
+    @State private var scale: CGFloat = 1.0
+    @State private var rotation: Double = 0
+    @State private var glow: Double = 0.5
+    @State private var yOffset: CGFloat = 0
+    
+    var body: some View {
+        Text("🔥")
+            .font(.system(size: 20))
+            .scaleEffect(scale)
+            .rotationEffect(.degrees(rotation))
+            .offset(y: yOffset)
+            .shadow(color: Color.orange.opacity(glow), radius: 10)
+            .shadow(color: Color.red.opacity(glow * 0.7), radius: 15)
+            .shadow(color: Color.yellow.opacity(glow * 0.3), radius: 5)
+            .onAppear {
+                // Start all animations
+                startAnimations()
+            }
+    }
+    
+    private func startAnimations() {
+        // Flickering scale animation
+        withAnimation(.easeInOut(duration: 0.4).repeatForever(autoreverses: true)) {
+            scale = 1.2
+        }
+        
+        // Subtle rotation animation  
+        withAnimation(.easeInOut(duration: 0.6).repeatForever(autoreverses: true)) {
+            rotation = 8
+        }
+        
+        // Glowing animation
+        withAnimation(.easeInOut(duration: 0.7).repeatForever(autoreverses: true)) {
+            glow = 1.0
+        }
+        
+        // Gentle floating animation
+        withAnimation(.easeInOut(duration: 1.0).repeatForever(autoreverses: true)) {
+            yOffset = -2
+        }
+    }
+}
+
+// Pull to Refresh Plant View - Shows animated plant based on pull distance
+struct PullToRefreshPlantView: View {
+    let offset: CGFloat
+    let isRefreshing: Bool
+    let isDragging: Bool
+    
+    @State private var plantRotation: Double = 0
+    @State private var leafFloat: CGFloat = 0
+    
+    private var pullProgress: CGFloat {
+        min(offset / 100, 1.0)
+    }
+    
+    private var plantScale: CGFloat {
+        0.5 + pullProgress * 0.5
+    }
+    
+    var body: some View {
+        VStack(spacing: 12) {
+            // Plant that grows as you pull
+            ZStack {
+                // Glow effect when almost ready
+                if pullProgress > 0.7 {
+                    Circle()
+                        .fill(
+                            RadialGradient(
+                                colors: [
+                                    Color(red: 0.3, green: 0.7, blue: 0.4).opacity(0.3),
+                                    Color.clear
+                                ],
+                                center: .center,
+                                startRadius: 20,
+                                endRadius: 40
+                            )
+                        )
+                        .frame(width: 80, height: 80)
+                        .blur(radius: 10)
+                        .scaleEffect(pullProgress)
+                }
+                
+                // Plant emoji that changes based on progress
+                Group {
+                    if isRefreshing {
+                        // Full plant when refreshing
+                        Text("🌿")
+                            .font(.system(size: 40))
+                            .rotationEffect(.degrees(plantRotation))
+                    } else if pullProgress < 0.3 {
+                        // Seed
+                        Text("🌰")
+                            .font(.system(size: 30))
+                            .opacity(1.0 - pullProgress * 2)
+                    } else if pullProgress < 0.7 {
+                        // Sprout
+                        Text("🌱")
+                            .font(.system(size: 35))
+                            .scaleEffect(plantScale)
+                            .rotationEffect(.degrees(pullProgress * 10))
+                    } else {
+                        // Almost there - bigger sprout
+                        Text("🌿")
+                            .font(.system(size: 38))
+                            .scaleEffect(plantScale)
+                            .rotationEffect(.degrees(Darwin.sin(pullProgress * .pi) * 5))
+                            .offset(y: leafFloat)
+                    }
+                }
+                .scaleEffect(isRefreshing ? 1.2 : 1.0)
+            }
+            
+            // Status text
+            if isRefreshing {
+                HStack(spacing: 8) {
+                    ProgressView()
+                        .progressViewStyle(CircularProgressViewStyle(tint: Color(red: 0.3, green: 0.7, blue: 0.4)))
+                        .scaleEffect(0.7)
+                    Text("Refreshing...")
+                        .font(.system(size: 13, weight: .medium))
+                        .foregroundColor(Color(red: 0.3, green: 0.7, blue: 0.4))
+                }
+            } else if pullProgress >= 1.0 {
+                Text("Release to refresh")
+                    .font(.system(size: 13, weight: .medium))
+                    .foregroundColor(Color(red: 0.3, green: 0.7, blue: 0.4))
+                    .scaleEffect(1.1)
+            } else if pullProgress > 0.5 {
+                Text("Keep pulling...")
+                    .font(.system(size: 12, weight: .regular))
+                    .foregroundColor(.white.opacity(0.7))
+            } else if offset > 10 {
+                Text("Pull to grow")
+                    .font(.system(size: 12, weight: .regular))
+                    .foregroundColor(.white.opacity(0.5))
+            }
+        }
+        .opacity(offset > 5 ? 1.0 : offset / 5.0) // Fade in as pulling starts
+        .onAppear {
+            print("DEBUG: PullToRefreshPlantView appeared with offset: \(offset)")
+            // Start animations
+            withAnimation(.easeInOut(duration: 1.5).repeatForever(autoreverses: true)) {
+                plantRotation = 10
+                leafFloat = -3
+            }
+        }
+        .onChange(of: offset) { _, newValue in
+            print("DEBUG: Plant view offset changed to: \(newValue), progress: \(pullProgress)")
+        }
+    }
+}
+
+// Smooth Refresh Animation View
+struct RefreshAnimationView: View {
+    @State private var animationProgress: Double = 0
+    @State private var currentStage = 0
+    @State private var showCompletion = false
+    
+    let stages = [
+        (emoji: "🌰", message: "Planting seeds..."),
+        (emoji: "🌱", message: "Growing sprouts..."),
+        (emoji: "🌿", message: "Refreshing garden..."),
+        (emoji: "🌳", message: "Almost ready...")
+    ]
+    
+    // Single source of truth for animation
+    private var currentEmoji: String {
+        if showCompletion { return "✓" }
+        return stages[min(currentStage, stages.count - 1)].emoji
+    }
+    
+    private var currentMessage: String {
+        if showCompletion { return "Garden refreshed!" }
+        return stages[min(currentStage, stages.count - 1)].message
+    }
+    
+    // Smooth animation values derived from progress
+    private var plantScale: CGFloat {
+        1.0 + Darwin.sin(animationProgress * .pi * 2) * 0.1
+    }
+    
+    private var plantRotation: Double {
+        Darwin.sin(animationProgress * .pi * 4) * 8
+    }
+    
+    private var glowIntensity: Double {
+        0.3 + Darwin.sin(animationProgress * .pi * 2) * 0.2
+    }
+    
+    var body: some View {
+        VStack(spacing: 18) {
+            // Plant display with subtle glow
+            ZStack {
+                // Simplified glow - no blur for performance
+                Circle()
+                    .fill(Color(red: 0.3, green: 0.7, blue: 0.4))
+                    .frame(width: 60, height: 60)
+                    .opacity(glowIntensity)
+                    .scaleEffect(1.2)
+                
+                // Single animated element
+                Text(currentEmoji)
+                    .font(.system(size: 42))
+                    .scaleEffect(plantScale)
+                    .rotationEffect(.degrees(plantRotation))
+                    .foregroundColor(showCompletion ? Color(red: 0.3, green: 0.7, blue: 0.4) : .primary)
+            }
+            .frame(height: 80)
+            
+            // Message and progress indicator
+            HStack(spacing: 10) {
+                if !showCompletion {
+                    ProgressView()
+                        .progressViewStyle(CircularProgressViewStyle(tint: Color(red: 0.3, green: 0.7, blue: 0.4)))
+                        .scaleEffect(0.8)
+                }
+                
+                Text(currentMessage)
+                    .font(.system(size: 15, weight: .medium))
+                    .foregroundColor(Color(red: 0.3, green: 0.7, blue: 0.4))
+            }
+            .animation(.none, value: showCompletion) // Prevent text animation
+            
+            // Simple progress indicator
+            ProgressBar(progress: Double(currentStage) / Double(stages.count - 1))
+                .frame(height: 4)
+                .frame(maxWidth: 150)
+        }
+        .onAppear {
+            startSmoothAnimation()
+        }
+    }
+    
+    private func startSmoothAnimation() {
+        // Single timeline animation
+        withAnimation(.linear(duration: 2.8)) {
+            animationProgress = 1.0
+        }
+        
+        // Stage progression without Timer
+        for i in 0..<stages.count {
+            DispatchQueue.main.asyncAfter(deadline: .now() + Double(i) * 0.7) {
+                withAnimation(.easeInOut(duration: 0.3)) {
+                    currentStage = i
+                }
+            }
+        }
+        
+        // Show completion
+        DispatchQueue.main.asyncAfter(deadline: .now() + 2.8) {
+            withAnimation(.spring(response: 0.4, dampingFraction: 0.8)) {
+                showCompletion = true
+            }
+        }
+    }
+}
+
+// Simple progress bar component
+struct ProgressBar: View {
+    let progress: Double
+    
+    var body: some View {
+        GeometryReader { geometry in
+            ZStack(alignment: .leading) {
+                RoundedRectangle(cornerRadius: 2)
+                    .fill(Color.gray.opacity(0.2))
+                
+                RoundedRectangle(cornerRadius: 2)
+                    .fill(Color(red: 0.3, green: 0.7, blue: 0.4))
+                    .frame(width: geometry.size.width * progress)
+                    .animation(.spring(response: 0.5, dampingFraction: 0.8), value: progress)
+            }
+        }
+    }
+}
+
+// Simple Refresh Indicator View
+struct RefreshIndicatorView: View {
+    let plantGrowth: CGFloat
+    let showSeedling: Bool
+    
+    @State private var rotation: Double = 0
+    
+    var body: some View {
+        HStack(spacing: 12) {
+            // Animated plant
+            Group {
+                if showSeedling {
+                    Text("🌿")
+                        .font(.system(size: 28))
+                        .scaleEffect(plantGrowth)
+                        .rotationEffect(.degrees(rotation))
+                } else {
+                    Text("🌱")
+                        .font(.system(size: 24))
+                        .scaleEffect(0.8 + plantGrowth * 0.2)
+                }
+            }
+            
+            // Loading text
+            Text("Refreshing your garden...")
+                .font(.system(size: 14, weight: .medium))
+                .foregroundColor(Color(red: 0.3, green: 0.7, blue: 0.4))
+            
+            // Progress indicator
+            ProgressView()
+                .progressViewStyle(CircularProgressViewStyle(tint: Color(red: 0.3, green: 0.7, blue: 0.4)))
+                .scaleEffect(0.8)
+        }
+        .padding(.horizontal, 24)
+        .padding(.vertical, 12)
+        .background(
+            RoundedRectangle(cornerRadius: 20)
+                .fill(Color.black.opacity(0.8))
+                .overlay(
+                    RoundedRectangle(cornerRadius: 20)
+                        .stroke(Color(red: 0.3, green: 0.7, blue: 0.4).opacity(0.3), lineWidth: 1)
+                )
+        )
+        .onAppear {
+            withAnimation(.easeInOut(duration: 1.0).repeatForever(autoreverses: true)) {
+                rotation = 10
+            }
+        }
+    }
+}
+
+// Old Pull to Refresh View Component (keeping for reference but simplified)
+struct PullToRefreshView: View {
+    let pullOffset: CGFloat
+    let isRefreshing: Bool
+    let plantGrowth: CGFloat
+    let leafRotation: Double
+    let showSeedling: Bool
+    
+    @State private var leafParticles: [(id: Int, offset: CGSize, opacity: Double)] = []
+    @State private var glowOpacity: Double = 0
+    
+    // Computed properties to break up complex expressions
+    private var glowGradient: RadialGradient {
+        RadialGradient(
+            colors: [
+                Color(red: 0.3, green: 0.7, blue: 0.4).opacity(glowOpacity),
+                Color(red: 0.3, green: 0.7, blue: 0.4).opacity(glowOpacity * 0.5),
+                Color.clear
+            ],
+            center: .center,
+            startRadius: 10,
+            endRadius: 50
+        )
+    }
+    
+    private var glowEffect: some View {
+        Circle()
+            .fill(glowGradient)
+            .frame(width: 100, height: 100)
+            .blur(radius: 10)
+            .scaleEffect(plantGrowth)
+    }
+    
+    private var leafParticlesView: some View {
+        ForEach(leafParticles, id: \.id) { particle in
+            Text("🍃")
+                .font(.system(size: 14))
+                .offset(particle.offset)
+                .opacity(particle.opacity)
+                .rotationEffect(.degrees(Double(particle.id) * 60 + leafRotation * 2))
+        }
+    }
+    
+    private var seedView: some View {
+        Text("🌰")
+            .font(.system(size: 30))
+            .scaleEffect(1.0 + plantGrowth * 0.3)
+            .opacity(1.0 - plantGrowth)
+    }
+    
+    private var seedlingView: some View {
+        Text("🌱")
+            .font(.system(size: 36))
+            .scaleEffect(0.5 + plantGrowth * 0.8)
+            .rotationEffect(.degrees(Darwin.sin(plantGrowth * .pi) * 5))
+            .opacity(plantGrowth)
+    }
+    
+    private var fullPlantView: some View {
+        Text("🌿")
+            .font(.system(size: 40))
+            .scaleEffect(plantGrowth)
+            .rotationEffect(.degrees(leafRotation))
+            .animation(.easeInOut(duration: 0.8).repeatForever(autoreverses: true), value: isRefreshing)
+    }
+    
+    private var statusTextView: some View {
+        Group {
+            if isRefreshing {
+                HStack(spacing: 8) {
+                    ProgressView()
+                        .progressViewStyle(CircularProgressViewStyle(tint: Color(red: 0.3, green: 0.7, blue: 0.4)))
+                        .scaleEffect(0.8)
+                    Text("Refreshing...")
+                        .font(.system(size: 14, weight: .medium))
+                        .foregroundColor(Color(red: 0.3, green: 0.7, blue: 0.4))
+                }
+            } else if pullOffset > 100 {
+                Text("Release to refresh")
+                    .font(.system(size: 14, weight: .medium))
+                    .foregroundColor(Color(red: 0.3, green: 0.7, blue: 0.4))
+                    .scaleEffect(1.1)
+            } else if pullOffset > 50 {
+                Text("Keep pulling...")
+                    .font(.system(size: 14, weight: .medium))
+                    .foregroundColor(.white.opacity(0.7))
+            } else if pullOffset > 20 {
+                Text("Pull to grow")
+                    .font(.system(size: 14, weight: .medium))
+                    .foregroundColor(.white.opacity(0.5))
+            }
+        }
+    }
+    
+    var body: some View {
+        VStack(spacing: 16) {
+            ZStack {
+                // Glow effect when growing
+                if plantGrowth > 0.3 {
+                    glowEffect
+                }
+                
+                // Floating leaf particles
+                leafParticlesView
+                
+                // Main plant animation
+                ZStack {
+                    if !showSeedling {
+                        seedView
+                    }
+                    
+                    if showSeedling && !isRefreshing {
+                        seedlingView
+                    }
+                    
+                    if isRefreshing {
+                        fullPlantView
+                    }
+                }
+                .offset(y: pullOffset * 0.3) // Elastic stretch effect
+            }
+            
+            // Status text
+            statusTextView
+                .animation(.easeOut(duration: 0.2), value: pullOffset)
+        }
+        .padding(.top, max(20, pullOffset * 0.5)) // Dynamic padding based on pull
+        .onAppear {
+            generateLeafParticles()
+        }
+        .onChange(of: plantGrowth) { _, newValue in
+            withAnimation(.easeOut(duration: 0.5)) {
+                glowOpacity = newValue * 0.6
+            }
+            
+            // Update leaf particles
+            if newValue > 0.5 && leafParticles.isEmpty {
+                generateLeafParticles()
+            }
+        }
+        .onChange(of: isRefreshing) { _, newValue in
+            if newValue {
+                animateLeafParticles()
+            }
+        }
+    }
+    
+    private func generateLeafParticles() {
+        leafParticles = (0..<6).map { i in
+            (
+                id: i,
+                offset: CGSize.zero,
+                opacity: 0.0
+            )
+        }
+    }
+    
+    private func animateLeafParticles() {
+        for i in 0..<leafParticles.count {
+            withAnimation(.easeOut(duration: 2.0).delay(Double(i) * 0.1)) {
+                let angle = Double(i) * 60.0 * .pi / 180.0
+                let radius = 30.0 + Double(i) * 5
+                leafParticles[i].offset = CGSize(
+                    width: cos(angle) * radius,
+                    height: sin(angle) * radius
+                )
+                leafParticles[i].opacity = 0.6
+            }
+            
+            // Fade out after animation
+            withAnimation(.easeOut(duration: 0.5).delay(2.0 + Double(i) * 0.1)) {
+                leafParticles[i].opacity = 0
+            }
+        }
+    }
+}
+
+// Tab Content View - Simple fade without white flash
+struct TabContentView<Content: View>: View {
+    let selectedTab: Int
+    let content: () -> Content
+    
+    var body: some View {
+        ZStack {
+            // Black background to prevent white flash
+            Color.black
+                .ignoresSafeArea()
+            
+            content()
+                .id(selectedTab) // Force view recreation
+                .transition(.asymmetric(
+                    insertion: .opacity.animation(.easeIn(duration: 0.2)),
+                    removal: .opacity.animation(.easeOut(duration: 0.1))
+                ))
+        }
+        .background(Color.black) // Ensure black background
     }
 }
 

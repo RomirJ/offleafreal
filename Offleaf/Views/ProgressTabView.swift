@@ -168,7 +168,7 @@ struct ProgressTabView: View {
             VStack(spacing: 0) {
                 // Header
                 HStack {
-                    LeafLogoView(size: 40)
+                    LeafLogoView(size: 56)
                     Text("Progress")
                         .font(.system(size: 28, weight: .bold))
                         .foregroundColor(.white)

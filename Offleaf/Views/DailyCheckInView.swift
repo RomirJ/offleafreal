@@ -33,7 +33,7 @@ struct DailyCheckInView: View {
             VStack(spacing: 0) {
                 // Header
                 HStack {
-                    LeafLogoView(size: 40)
+                    LeafLogoView(size: 56)
                     
                     Spacer().frame(width: 16)
                     
@@ -244,7 +244,10 @@ struct DailyCheckInView: View {
             } else {
                 // Show completion screen
                 recordCheckIn()
-                showingCompletion = true
+                // Add a small delay to ensure UI updates properly
+                DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
+                    showingCompletion = true
+                }
             }
         }
     }

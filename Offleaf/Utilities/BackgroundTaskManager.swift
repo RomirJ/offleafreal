@@ -9,6 +9,19 @@ import BackgroundTasks
 import SwiftUI
 import UserNotifications
 
+// Actor to handle task completion in async-safe manner
+actor TaskCompletionActor {
+    private var isCompleted = false
+    
+    func markCompleted() -> Bool {
+        if !isCompleted {
+            isCompleted = true
+            return true
+        }
+        return false
+    }
+}
+
 class BackgroundTaskManager {
     static let shared = BackgroundTaskManager()
     
@@ -91,24 +104,21 @@ class BackgroundTaskManager {
     private func handleAppRefresh(task: BGAppRefreshTask) {
         scheduleAppRefresh()
         
-        let queue = OperationQueue()
-        queue.maxConcurrentOperationCount = 1
+        let taskCompletionActor = TaskCompletionActor()
         
-        let taskCompletionLock = NSLock()
-        var taskCompleted = false
-        
-        let operation = BlockOperation { [weak self] in
-            guard self != nil else {
-                taskCompletionLock.lock()
-                defer { taskCompletionLock.unlock() }
-                if !taskCompleted {
-                    taskCompleted = true
-                    task.setTaskCompleted(success: false)
+        Task {
+            // Set up expiration handler
+            task.expirationHandler = {
+                Task {
+                    let completed = await taskCompletionActor.markCompleted()
+                    if completed {
+                        task.setTaskCompleted(success: false)
+                    }
                 }
-                return
             }
             
-            Task { @MainActor in
+            // Perform the background work
+            await MainActor.run {
                 StreakManager.shared.validateStreak()
                 
                 if UserDefaults.standard.bool(forKey: "hasCompletedOnboarding") {
@@ -121,59 +131,34 @@ class BackgroundTaskManager {
                         NotificationManager.shared.scheduleCheckInReminderIfNeeded()
                     }
                 }
-                
-                taskCompletionLock.lock()
-                defer { taskCompletionLock.unlock() }
-                if !taskCompleted {
-                    taskCompleted = true
-                    task.setTaskCompleted(success: true)
-                }
+            }
+            
+            // Mark task as completed
+            let completed = await taskCompletionActor.markCompleted()
+            if completed {
+                task.setTaskCompleted(success: true)
             }
         }
-        
-        task.expirationHandler = { [weak queue, weak operation] in
-            queue?.cancelAllOperations()
-            taskCompletionLock.lock()
-            defer { taskCompletionLock.unlock() }
-            if !taskCompleted {
-                taskCompleted = true
-                task.setTaskCompleted(success: operation?.isCancelled == false)
-            }
-        }
-        
-        operation.completionBlock = { [weak operation] in
-            taskCompletionLock.lock()
-            defer { taskCompletionLock.unlock() }
-            if !taskCompleted {
-                taskCompleted = true
-                task.setTaskCompleted(success: operation?.isCancelled == false)
-            }
-        }
-        
-        queue.addOperation(operation)
     }
     
     private func handleNotificationRefresh(task: BGProcessingTask) {
         scheduleNotificationRefresh()
         
-        let queue = OperationQueue()
-        queue.maxConcurrentOperationCount = 1
+        let taskCompletionActor = TaskCompletionActor()
         
-        let taskCompletionLock = NSLock()
-        var taskCompleted = false
-        
-        let operation = BlockOperation { [weak self] in
-            guard self != nil else {
-                taskCompletionLock.lock()
-                defer { taskCompletionLock.unlock() }
-                if !taskCompleted {
-                    taskCompleted = true
-                    task.setTaskCompleted(success: false)
+        Task {
+            // Set up expiration handler
+            task.expirationHandler = {
+                Task {
+                    let completed = await taskCompletionActor.markCompleted()
+                    if completed {
+                        task.setTaskCompleted(success: false)
+                    }
                 }
-                return
             }
             
-            Task { @MainActor in
+            // Perform the background work
+            await MainActor.run {
                 NotificationManager.shared.checkAndRescheduleMissedMilestones()
                 NotificationManager.shared.refreshScheduledNotifications()
                 
@@ -181,36 +166,14 @@ class BackgroundTaskManager {
                 if hasCompletedOnboarding {
                     NotificationManager.shared.scheduleAllNotifications()
                 }
-                
-                taskCompletionLock.lock()
-                defer { taskCompletionLock.unlock() }
-                if !taskCompleted {
-                    taskCompleted = true
-                    task.setTaskCompleted(success: true)
-                }
+            }
+            
+            // Mark task as completed
+            let completed = await taskCompletionActor.markCompleted()
+            if completed {
+                task.setTaskCompleted(success: true)
             }
         }
-        
-        task.expirationHandler = { [weak queue, weak operation] in
-            queue?.cancelAllOperations()
-            taskCompletionLock.lock()
-            defer { taskCompletionLock.unlock() }
-            if !taskCompleted {
-                taskCompleted = true
-                task.setTaskCompleted(success: operation?.isCancelled == false)
-            }
-        }
-        
-        operation.completionBlock = { [weak operation] in
-            taskCompletionLock.lock()
-            defer { taskCompletionLock.unlock() }
-            if !taskCompleted {
-                taskCompleted = true
-                task.setTaskCompleted(success: operation?.isCancelled == false)
-            }
-        }
-        
-        queue.addOperation(operation)
     }
     
     func cancelAllBackgroundTasks() {

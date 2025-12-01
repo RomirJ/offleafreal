@@ -7,6 +7,23 @@
 
 import SwiftUI
 
+// Local structure for relapse journaling
+struct RelapseJournalEntry: Codable {
+    let id: UUID
+    let date: Date
+    let content: String
+    let mood: String?
+    let trigger: String?
+    
+    init(id: UUID = UUID(), date: Date, content: String, mood: String? = nil, trigger: String? = nil) {
+        self.id = id
+        self.date = date
+        self.content = content
+        self.mood = mood
+        self.trigger = trigger
+    }
+}
+
 struct RelapsedView: View {
     @StateObject private var streakManager = StreakManager.shared
     @Environment(\.dismiss) var dismiss
@@ -14,7 +31,6 @@ struct RelapsedView: View {
     @AppStorage("checkInDates") private var checkInDatesString = ""
     @AppStorage("lastCheckInDate") private var lastCheckInDateString = ""
     @State private var showingJournal = false
-    @StateObject private var journalManager = JournalManager()
     @State private var shouldResetAndDismiss = false
     var dismissAll: (() -> Void)? = nil
     
@@ -179,8 +195,32 @@ struct RelapsedView: View {
         .toolbar(.hidden, for: .navigationBar)
         .sheet(isPresented: $showingJournal) {
             RelapseJournalEntryView { entry in
-                journalManager.saveEntry(entry)
+                // Save journal entry directly to UserDefaults
+                saveJournalEntry(entry)
             }
+        }
+    }
+    
+    func saveJournalEntry(_ entry: RelapseJournalEntry) {
+        // Load existing entries
+        var entries: [RelapseJournalEntry] = []
+        if let data = UserDefaults.standard.data(forKey: "relapseJournalEntries") {
+            if let decoded = try? JSONDecoder().decode([RelapseJournalEntry].self, from: data) {
+                entries = decoded
+            }
+        }
+        
+        // Add new entry
+        entries.append(entry)
+        
+        // Keep only last 100 entries to prevent unbounded growth
+        if entries.count > 100 {
+            entries = Array(entries.suffix(100))
+        }
+        
+        // Save back to UserDefaults
+        if let encoded = try? JSONEncoder().encode(entries) {
+            UserDefaults.standard.set(encoded, forKey: "relapseJournalEntries")
         }
     }
     
@@ -230,7 +270,7 @@ struct TipRow: View {
 // Custom journal entry view specifically for relapse journaling
 struct RelapseJournalEntryView: View {
     @Environment(\.dismiss) var dismiss
-    let onSave: (JournalEntry) -> Void
+    let onSave: (RelapseJournalEntry) -> Void
     
     @State private var content = ""
     @State private var selectedMood = ""
@@ -284,7 +324,7 @@ struct RelapseJournalEntryView: View {
                     Spacer()
                     
                     Button(action: {
-                        let entry = JournalEntry(
+                        let entry = RelapseJournalEntry(
                             date: Date(),
                             content: content,
                             mood: selectedMood.isEmpty ? nil : selectedMood,

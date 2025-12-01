@@ -68,21 +68,29 @@ class StreakManager: ObservableObject {
             // Check if already checked in today (within the barrier)
             guard !self.lastCheckInDateString.isEmpty else {
                 // First check-in ever
-                self.checkInStreak = 1
-                self.longestCheckInStreak = 1
-                self.lastCheckInDateString = formatter.string(from: today)
+                DispatchQueue.main.async {
+                    self.checkInStreak = 1
+                    self.longestCheckInStreak = 1
+                    self.lastCheckInDateString = formatter.string(from: today)
+                }
                 if self.addCheckInDateUnsafe(today) {
-                    self.totalCheckInDays += 1
+                    DispatchQueue.main.async {
+                        self.totalCheckInDays += 1
+                    }
                 }
                 return
             }
             
             guard let lastDate = formatter.date(from: self.lastCheckInDateString) else {
-                self.checkInStreak = 1
-                self.longestCheckInStreak = max(self.longestCheckInStreak, 1)
-                self.lastCheckInDateString = formatter.string(from: today)
+                DispatchQueue.main.async {
+                    self.checkInStreak = 1
+                    self.longestCheckInStreak = max(self.longestCheckInStreak, 1)
+                    self.lastCheckInDateString = formatter.string(from: today)
+                }
                 if self.addCheckInDateUnsafe(today) {
-                    self.totalCheckInDays += 1
+                    DispatchQueue.main.async {
+                        self.totalCheckInDays += 1
+                    }
                 }
                 return
             }
@@ -98,28 +106,35 @@ class StreakManager: ObservableObject {
             let todayNoon = self.normalizeToNoon(today, calendar: calendar)
             let delta = calendar.dateComponents([.day], from: lastDay, to: todayNoon).day ?? 0
             
+            let newStreak: Int
             switch delta {
             case 0:
                 // Same day - shouldn't happen due to check above
-                self.checkInStreak = max(self.checkInStreak, 1)
+                newStreak = max(self.checkInStreak, 1)
             case 1:
                 // Consecutive day - increment streak
-                self.checkInStreak += 1
+                newStreak = self.checkInStreak + 1
             default:
                 // Missed days - reset streak
-                self.checkInStreak = 1
+                newStreak = 1
             }
             
-            // Update longest streak
-            self.longestCheckInStreak = max(self.longestCheckInStreak, self.checkInStreak)
+            let currentLongest = self.longestCheckInStreak
             
-            // Update last check-in date
-            self.lastCheckInDateString = formatter.string(from: today)
+            // Update all properties on main thread
+            DispatchQueue.main.async {
+                self.checkInStreak = newStreak
+                self.longestCheckInStreak = max(currentLongest, newStreak)
+                // Update last check-in date
+                self.lastCheckInDateString = formatter.string(from: today)
+            }
             
             // Add to check-in dates list
             if self.addCheckInDateUnsafe(today) {
                 // New day checked in - increment total
-                self.totalCheckInDays += 1
+                DispatchQueue.main.async {
+                    self.totalCheckInDays += 1
+                }
             }
         }
     }
@@ -128,11 +143,13 @@ class StreakManager: ObservableObject {
     func resetStreak() {
         streakQueue.async(flags: .barrier) { [weak self] in
             guard let self = self else { return }
-            self.checkInStreak = 0
-            self.lastCheckInDateString = ""
-            self.checkInDatesString = ""
-            self.longestCheckInStreak = 0
-            self.totalCheckInDays = 0
+            DispatchQueue.main.async {
+                self.checkInStreak = 0
+                self.lastCheckInDateString = ""
+                self.checkInDatesString = ""
+                self.longestCheckInStreak = 0
+                self.totalCheckInDays = 0
+            }
         }
     }
     
@@ -144,7 +161,9 @@ class StreakManager: ObservableObject {
             
             let formatter = ISO8601DateFormatter()
             guard let lastDate = formatter.date(from: self.lastCheckInDateString) else {
-                self.checkInStreak = 0
+                DispatchQueue.main.async {
+                    self.checkInStreak = 0
+                }
                 return
             }
             
@@ -156,7 +175,9 @@ class StreakManager: ObservableObject {
             
             // Reset streak if more than 1 day has passed
             if delta > 1 {
-                self.checkInStreak = 0
+                DispatchQueue.main.async {
+                    self.checkInStreak = 0
+                }
             }
         }
     }
@@ -179,7 +200,10 @@ class StreakManager: ObservableObject {
         
         if !dates.contains(dateString) {
             dates.append(dateString)
-            checkInDatesString = dates.joined(separator: ",")
+            let newDatesString = dates.joined(separator: ",")
+            DispatchQueue.main.async { [weak self] in
+                self?.checkInDatesString = newDatesString
+            }
             return true
         }
         return false

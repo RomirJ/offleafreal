@@ -40,7 +40,7 @@ struct CalculatingPlanView: View {
             
             VStack(spacing: 0) {
                 // Leaf logo at top - using original component for better gradient compatibility
-                LeafLogoView(size: 100)
+                LeafLogoView(size: 160)
                     .padding(.top, 80)
                 
                 Spacer()

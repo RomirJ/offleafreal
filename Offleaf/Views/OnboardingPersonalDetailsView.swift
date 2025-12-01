@@ -218,18 +218,6 @@ struct OnboardingPersonalDetailsView: View {
                             )
                             .cornerRadius(28)
                     }
-                    
-                    // Skip option shown when fields are empty
-                    if userName.isEmpty && userAge.isEmpty {
-                        Button(action: {
-                            onComplete()
-                        }) {
-                            Text("Skip for now")
-                                .font(.system(size: 15, weight: .medium))
-                                .foregroundColor(.white.opacity(0.4))
-                                .padding(.vertical, 8)
-                        }
-                    }
                 }
                 .padding(.horizontal, 24)
                 .padding(.bottom, 40)

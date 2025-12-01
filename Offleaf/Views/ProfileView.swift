@@ -28,7 +28,7 @@ struct ProfileView: View {
             VStack(spacing: 0) {
                 // Header
                 HStack {
-                    LeafLogoView(size: 40)
+                    LeafLogoView(size: 60)
                     Text("Profile")
                         .font(.system(size: 28, weight: .bold))
                         .foregroundColor(.white)
