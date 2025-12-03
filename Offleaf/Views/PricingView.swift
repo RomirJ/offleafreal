@@ -19,6 +19,10 @@ struct PricingView: View {
     @State private var showError = false
     @State private var errorMessage = ""
     @State private var isNetworkError = false
+    @State private var showPromoOffer = true
+    @State private var promoPurchasing = false
+    @State private var showSpinWheel = false
+    @State private var returnToPromoOffer = false
     
     private static let termsOfUseURL: URL = {
         URL(string: "https://www.apple.com/legal/internet-services/itunes/dev/stdeula/") 
@@ -33,17 +37,52 @@ struct PricingView: View {
     var onComplete: () -> Void
     
     var body: some View {
-        GeometryReader { geometry in
-            let topInset = geometry.safeAreaInsets.top
-            let bottomInset = geometry.safeAreaInsets.bottom
+        if showSpinWheel {
+            SpinWheelView(
+                onContinue: {
+                    // Go back to promo offer after spin
+                    withAnimation(.easeInOut(duration: 0.4)) {
+                        showSpinWheel = false
+                        showPromoOffer = true
+                    }
+                },
+                onDismiss: {
+                    // User dismissed from special offer X button - go back to promo offer
+                    withAnimation(.easeInOut(duration: 0.4)) {
+                        showSpinWheel = false
+                        showPromoOffer = true
+                        returnToPromoOffer = true
+                    }
+                }
+            )
+            .transition(.opacity.animation(.easeInOut(duration: 0.4)))
+        } else if showPromoOffer {
+            PromoOfferView(
+                isPurchasing: $promoPurchasing,
+                onPurchase: { planType in
+                    Task {
+                        await purchasePromoSubscription(planType: planType)
+                    }
+                },
+                onRestore: {
+                    Task {
+                        await restorePurchases()
+                    }
+                }
+            )
+            .transition(.opacity.animation(.easeInOut(duration: 0.4)))
+        } else {
+            GeometryReader { geometry in
+                let topInset = geometry.safeAreaInsets.top
+                let bottomInset = geometry.safeAreaInsets.bottom
 
-            ZStack {
-                Color.black
-                    .ignoresSafeArea()
-                
-                let bottomPadding = max(bottomInset, 20) + 32
+                ZStack {
+                    Color.black
+                        .ignoresSafeArea()
+                    
+                    let bottomPadding = max(bottomInset, 20) + 32
 
-                ScrollView(showsIndicators: false) {
+                    ScrollView(showsIndicators: false) {
                     VStack(spacing: 16) {
                         Image("LeafLogo")
                             .resizable()
@@ -154,9 +193,10 @@ struct PricingView: View {
                     Color.clear
                         .frame(height: bottomPadding)
                 }
+                }
             }
-        }
-        .alert("Error", isPresented: $showError) {
+            .transition(.opacity.animation(.easeInOut(duration: 0.4)))
+            .alert("Error", isPresented: $showError) {
             if isNetworkError {
                 Button("Try Again") {
                     Task {
@@ -184,6 +224,7 @@ struct PricingView: View {
                 selectedProduct = firstProduct
                 selectedFallbackPlan = nil
             }
+        }
         }
     }
     
@@ -239,6 +280,96 @@ struct PricingView: View {
         }
         .padding(.horizontal, 24)
         .padding(.top, 20)
+    }
+    
+    @MainActor
+    private func purchasePromoSubscription(planType: String) async {
+        // First, fetch the correct product based on plan type
+        await storeKitManager.loadProducts()
+        
+        // Use the promotional product IDs with the new pricing
+        let productID = planType == "yearly" ? 
+            StoreKitManager.ProductID.promoAnnual.rawValue : 
+            StoreKitManager.ProductID.promoMonthly.rawValue
+        
+        guard let product = storeKitManager.product(withID: productID) else {
+            errorMessage = "Product not available. Please try again."
+            showError = true
+            withAnimation(.easeInOut(duration: 0.4)) {
+                showPromoOffer = false  // Dismiss the promo view to show error
+            }
+            return
+        }
+        
+        promoPurchasing = true
+        isNetworkError = false
+        
+        do {
+            let success = try await subscriptionManager.purchaseSubscription(product: product)
+            if success {
+                onComplete()  // This takes the user into the main app
+            } else {
+                // Purchase was cancelled or pending - show spin wheel
+                print("[Purchase] Transaction returned nil - user likely cancelled")
+                promoPurchasing = false
+                withAnimation(.easeInOut(duration: 0.4)) {
+                    showPromoOffer = false
+                    showSpinWheel = true
+                }
+                return
+            }
+        } catch StoreError.failedVerification {
+            errorMessage = "Purchase verification failed. Please try again."
+            showError = true
+        } catch let error as NSError where error.domain == NSURLErrorDomain {
+            // Network-specific errors
+            isNetworkError = true
+            switch error.code {
+            case NSURLErrorNotConnectedToInternet:
+                errorMessage = "No internet connection. Please check your connection and try again."
+            case NSURLErrorTimedOut:
+                errorMessage = "Request timed out. Please try again."
+            case NSURLErrorNetworkConnectionLost:
+                errorMessage = "Connection lost. Please try again."
+            default:
+                errorMessage = "Network error. Please check your connection and try again."
+            }
+            showError = true
+        } catch {
+            let nsError = error as NSError
+            print("[Purchase] Error: domain=\(nsError.domain), code=\(nsError.code), description=\(error.localizedDescription)")
+            
+            // Check if user cancelled (StoreKit error code 2 or specific message)
+            if nsError.domain == "SKErrorDomain" && nsError.code == 2 {
+                // User cancelled - show spin wheel
+                print("[Purchase] User cancelled - showing spin wheel")
+                errorMessage = ""
+                showError = false
+                withAnimation(.easeInOut(duration: 0.4)) {
+                    showPromoOffer = false
+                    showSpinWheel = true
+                }
+            } else if error.localizedDescription.lowercased().contains("cancelled") || 
+                      error.localizedDescription.lowercased().contains("canceled") {
+                // Alternative check for cancellation
+                print("[Purchase] User cancelled (alt check) - showing spin wheel")
+                errorMessage = ""
+                showError = false
+                withAnimation(.easeInOut(duration: 0.4)) {
+                    showPromoOffer = false
+                    showSpinWheel = true
+                }
+            } else {
+                // Other errors
+                errorMessage = "Purchase failed: \(error.localizedDescription)"
+                showError = true
+                withAnimation(.easeInOut(duration: 0.4)) {
+                    showPromoOffer = false  // Dismiss promo view to show error
+                }
+            }
+        }
+        
+        promoPurchasing = false
     }
     
     @MainActor
@@ -397,6 +528,15 @@ struct SubscriptionCard: View {
     private var includesTrial: Bool {
         planKind != .lifetime && product.subscription != nil
     }
+    
+    private var monthlyEquivalentPrice: String {
+        let annualPrice = NSDecimalNumber(decimal: product.price).doubleValue
+        let monthlyEquivalent = annualPrice / 12.0
+        let formatter = NumberFormatter()
+        formatter.numberStyle = .currency
+        formatter.currencyCode = product.priceFormatStyle.currencyCode
+        return formatter.string(from: NSNumber(value: monthlyEquivalent)) ?? "$5.83"
+    }
 
     var body: some View {
         Button(action: onTap) {
@@ -420,15 +560,37 @@ struct SubscriptionCard: View {
                         }
                     }
                     
-                    HStack(alignment: .firstTextBaseline, spacing: 6) {
-                        Text(product.displayPrice)
-                            .font(.system(size: 28, weight: .bold))
-                            .foregroundColor(primaryTextColor)
-                        
-                        if !priceSuffix.isEmpty {
-                            Text(priceSuffix)
-                                .font(.system(size: 18, weight: .medium))
-                                .foregroundColor(secondaryTextColor)
+                    Group {
+                        if planKind == .annual {
+                            // For annual plan, show monthly breakdown with crossed out comparison
+                            HStack(alignment: .firstTextBaseline, spacing: 6) {
+                                Text(monthlyEquivalentPrice)
+                                    .font(.system(size: 28, weight: .bold))
+                                    .foregroundColor(primaryTextColor)
+                                
+                                Text("/ mo")
+                                    .font(.system(size: 18, weight: .medium))
+                                    .foregroundColor(secondaryTextColor)
+                                
+                                Text("$14.99/month")
+                                    .font(.system(size: 14, weight: .medium))
+                                    .foregroundColor(secondaryTextColor.opacity(0.7))
+                                    .strikethrough(true, color: secondaryTextColor.opacity(0.5))
+                                    .padding(.leading, 4)
+                            }
+                        } else {
+                            // For other plans, show regular price
+                            HStack(alignment: .firstTextBaseline, spacing: 6) {
+                                Text(product.displayPrice)
+                                    .font(.system(size: 28, weight: .bold))
+                                    .foregroundColor(primaryTextColor)
+                                
+                                if !priceSuffix.isEmpty {
+                                    Text(priceSuffix)
+                                        .font(.system(size: 18, weight: .medium))
+                                        .foregroundColor(secondaryTextColor)
+                                }
+                            }
                         }
                     }
                     

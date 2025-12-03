@@ -20,6 +20,10 @@ class StoreKitManager: ObservableObject {
         case monthly = "com.offleaf.premium.monthly"
         case annual = "com.offleaf.premium.annual"
         case lifetime = "com.offleaf.premium.lifetime.unlock"
+        // Promotional pricing products
+        case promoMonthly = "com.offleaf.promo.monthly"
+        case promoAnnual = "com.offleaf.promo.annual"
+        case specialAnnual = "com.offleaf.special.annual"
     }
 
     private var productIDs: [String] {
@@ -81,6 +85,10 @@ class StoreKitManager: ObservableObject {
     func loadProducts() async {
         do {
             subscriptions = try await Product.products(for: productIDs)
+            print("[StoreKit] Successfully loaded \(subscriptions.count) products:")
+            for product in subscriptions {
+                print("[StoreKit] - \(product.id): \(product.displayName) - \(product.displayPrice)")
+            }
         } catch {
             print("[StoreKit] ERROR: Failed to load products: \(error.localizedDescription)")
             
