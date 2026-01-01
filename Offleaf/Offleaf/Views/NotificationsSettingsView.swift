@@ -86,7 +86,7 @@ struct NotificationsSettingsView: View {
                                         .labelsHidden()
                                         .colorScheme(.dark)
                                         .frame(height: 120)
-                                        .onChange(of: checkInTime) { newValue in
+                                        .onChange(of: checkInTime) { oldValue, newValue in
                                             saveCheckInTime(newValue)
                                             notificationManager.updateDailyCheckInTime(checkInTimeString)
                                         }

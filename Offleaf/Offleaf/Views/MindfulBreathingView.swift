@@ -28,7 +28,7 @@ struct MindfulBreathingView: View {
                     
                     Spacer().frame(width: 16)
                     
-                    LeafLogoView(size: 40)
+                    LeafLogoView(size: 56)
                     
                     Text("Learn")
                         .font(.system(size: 20, weight: .semibold))
@@ -252,7 +252,7 @@ struct MindfulBreathingView: View {
                 }
             }
         }
-        .navigationBarHidden(true)
+        .toolbar(.hidden, for: .navigationBar)
     }
 }
 

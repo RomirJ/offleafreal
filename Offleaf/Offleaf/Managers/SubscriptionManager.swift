@@ -88,7 +88,16 @@ class SubscriptionManager: ObservableObject {
             }
             return false
         } catch {
-            print("Purchase failed: \(error)")
+            print("[Subscription] ERROR: Purchase failed for product \(product.displayName): \(error.localizedDescription)")
+            
+            // Track critical payment failures
+            #if !DEBUG
+            // Analytics.track("purchase_failed", properties: [
+            //     "product_id": product.id,
+            //     "error": error.localizedDescription
+            // ])
+            #endif
+            
             throw error
         }
     }

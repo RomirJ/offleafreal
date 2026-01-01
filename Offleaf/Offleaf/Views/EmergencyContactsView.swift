@@ -38,9 +38,26 @@ class ContactsManager: ObservableObject {
     }
     
     func loadContacts() {
-        if let data = UserDefaults.standard.data(forKey: saveKey),
-           let decoded = try? JSONDecoder().decode([EmergencyContact].self, from: data) {
-            contacts = decoded
+        if let data = UserDefaults.standard.data(forKey: saveKey) {
+            do {
+                let decoded = try JSONDecoder().decode([EmergencyContact].self, from: data)
+                contacts = decoded
+            } catch {
+                // Data corrupted - try to recover
+                print("[EmergencyContacts] ERROR: Failed to decode contacts: \(error)")
+                
+                // Attempt recovery from backup
+                if let backupData = UserDefaults.standard.data(forKey: "\(saveKey)_backup"),
+                   let backupContacts = try? JSONDecoder().decode([EmergencyContact].self, from: backupData) {
+                    contacts = backupContacts
+                    save() // Re-save to main key
+                } else {
+                    // Use defaults but keep corrupted data for debugging
+                    UserDefaults.standard.set(data, forKey: "\(saveKey)_corrupted")
+                    contacts = defaultHelplines
+                    save()
+                }
+            }
         } else {
             // First time - add default helplines
             contacts = defaultHelplines
@@ -59,8 +76,26 @@ class ContactsManager: ObservableObject {
     }
     
     private func save() {
-        if let encoded = try? JSONEncoder().encode(contacts) {
+        do {
+            let encoder = JSONEncoder()
+            encoder.outputFormatting = .prettyPrinted
+            let encoded = try encoder.encode(contacts)
+            
+            // Create backup before overwriting
+            if let existingData = UserDefaults.standard.data(forKey: saveKey) {
+                UserDefaults.standard.set(existingData, forKey: "\(saveKey)_backup")
+            }
+            
+            // Save new data
             UserDefaults.standard.set(encoded, forKey: saveKey)
+            
+            // Verify save succeeded
+            if UserDefaults.standard.data(forKey: saveKey) == nil {
+                print("[EmergencyContacts] CRITICAL: Failed to save contacts to UserDefaults")
+            }
+        } catch {
+            print("[EmergencyContacts] CRITICAL: Failed to encode contacts: \(error)")
+            // Keep existing data rather than losing everything
         }
     }
     
@@ -402,7 +437,7 @@ struct EmergencyContactsView: View {
                 }
             }
         }
-        .navigationBarHidden(true)
+        .toolbar(.hidden, for: .navigationBar)
         .onAppear {
             withAnimation(.easeOut(duration: 0.5)) {
                 animateGradient = true

@@ -36,9 +36,30 @@ class JournalManager: ObservableObject {
     }
     
     func loadEntries() {
-        if let data = UserDefaults.standard.data(forKey: saveKey),
-           let decoded = try? JSONDecoder().decode([JournalEntry].self, from: data) {
-            entries = decoded
+        if let data = UserDefaults.standard.data(forKey: saveKey) {
+            do {
+                let decoded = try JSONDecoder().decode([JournalEntry].self, from: data)
+                entries = decoded
+            } catch {
+                print("[Journal] ERROR: Failed to decode entries: \(error)")
+                
+                // Try to recover from backup
+                if let backupData = UserDefaults.standard.data(forKey: "\(saveKey)_backup") {
+                    do {
+                        let backupEntries = try JSONDecoder().decode([JournalEntry].self, from: backupData)
+                        entries = backupEntries
+                        save() // Re-save to main key
+                        print("[Journal] Recovered \(entries.count) entries from backup")
+                    } catch {
+                        print("[Journal] ERROR: Backup also corrupted: \(error)")
+                        // Save corrupted data for debugging
+                        UserDefaults.standard.set(data, forKey: "\(saveKey)_corrupted")
+                        entries = []
+                    }
+                } else {
+                    entries = []
+                }
+            }
         }
     }
     
@@ -53,8 +74,27 @@ class JournalManager: ObservableObject {
     }
     
     private func save() {
-        if let encoded = try? JSONEncoder().encode(entries) {
+        do {
+            let encoder = JSONEncoder()
+            encoder.outputFormatting = .prettyPrinted
+            encoder.dateEncodingStrategy = .iso8601
+            let encoded = try encoder.encode(entries)
+            
+            // Create backup before overwriting (keep last 2 versions)
+            if let existingData = UserDefaults.standard.data(forKey: saveKey) {
+                UserDefaults.standard.set(existingData, forKey: "\(saveKey)_backup")
+            }
+            
+            // Save new data
             UserDefaults.standard.set(encoded, forKey: saveKey)
+            
+            // Verify save succeeded
+            if UserDefaults.standard.data(forKey: saveKey) != encoded {
+                print("[Journal] WARNING: Save verification failed")
+            }
+        } catch {
+            print("[Journal] CRITICAL: Failed to encode \(entries.count) entries: \(error)")
+            // Don't overwrite existing data if encoding fails
         }
     }
 }
@@ -280,7 +320,7 @@ struct JournalFeatureView: View {
                 }
             }
         }
-        .navigationBarHidden(true)
+        .toolbar(.hidden, for: .navigationBar)
         .onAppear {
             withAnimation(.easeOut(duration: 0.5)) {
                 animateGradient = true

@@ -9,6 +9,7 @@ import SwiftUI
 import Combine
 
 struct ProgressTabView: View {
+    @StateObject private var streakManager = StreakManager.shared
     @State private var selectedTab: String = "Mood"
     @State private var checkInEntries: [DailyCheckInEntry] = []
     
@@ -16,10 +17,6 @@ struct ProgressTabView: View {
     @AppStorage("quitDate") private var quitDateString = ""
     @AppStorage("weeklySpending") private var weeklySpending: Double = 0
     @AppStorage("smokeFrequency") private var smokeFrequencyRaw = CannabisUseFrequency.unknown.rawValue
-    @AppStorage("daysClean") private var storedDaysClean = 0
-    @AppStorage("checkInStreak") private var checkInStreak = 0
-    @AppStorage("longestCheckInStreak") private var storedLongestStreak = 0
-    @AppStorage("totalCheckInDays") private var storedTotalDays = 0
     @AppStorage("checkInDates") private var checkInDatesString = ""
     @AppStorage("lastCheckInDate") private var lastCheckInDateString = ""
     
@@ -29,19 +26,37 @@ struct ProgressTabView: View {
         let formatter = DateFormatter()
         formatter.calendar = Calendar(identifier: .gregorian)
         formatter.locale = Locale(identifier: "en_US_POSIX")
-        formatter.timeZone = TimeZone(secondsFromGMT: 0)
+        // Use local timezone for consistency
+        formatter.timeZone = TimeZone.current
         formatter.dateFormat = "yyyy-MM-dd"
         return formatter
     }()
 
-    // Prefer streak-based progress but fall back to legacy counters if needed.
+    // Use unified streak from StreakManager
     private var currentStreak: Int {
-        let streakDays = max(checkInStreak, 0)
-        if streakDays > 0 { return streakDays }
-        if storedDaysClean > 0 { return storedDaysClean }
-        return derivedDaysFromQuitDate
+        streakManager.currentStreak
     }
 
+    // Match HomeView's daysSinceQuit calculation for consistency
+    private var daysSinceQuit: Int {
+        guard !quitDateString.isEmpty,
+              let quitDate = ProgressTabView.isoFormatter.date(from: quitDateString) else {
+            return 0
+        }
+        let calendar = Calendar.current
+        let startOfQuitDate = calendar.startOfDay(for: quitDate)
+        let startOfToday = calendar.startOfDay(for: Date())
+        
+        // If quit date is in the future, treat as 0 days
+        if startOfQuitDate > startOfToday {
+            return 0
+        }
+        
+        let days = calendar.dateComponents([.day], from: startOfQuitDate, to: startOfToday).day ?? 0
+        // Add 1 to start counting from Day 1 on the quit date itself
+        return max(1, days + 1)
+    }
+    
     private var derivedDaysFromQuitDate: Int {
         guard !quitDateString.isEmpty,
               let quitDate = ProgressTabView.isoFormatter.date(from: quitDateString) else {
@@ -52,18 +67,11 @@ struct ProgressTabView: View {
     }
 
     private var longestStreak: Int {
-        let trackedValue = max(storedLongestStreak, currentStreak)
-        if trackedValue > 0 {
-            return trackedValue
-        }
-        return max(currentStreak, computedLongestStreak)
+        max(streakManager.longestStreak, currentStreak)
     }
 
     private var totalDays: Int {
-        if storedTotalDays > 0 {
-            return max(storedTotalDays, currentStreak)
-        }
-        return max(checkInDateStrings.count, currentStreak)
+        max(streakManager.totalDays, checkInDateStrings.count)
     }
 
     private var computedLongestStreak: Int {
@@ -100,12 +108,12 @@ struct ProgressTabView: View {
         return checkInDateStrings.compactMap { formatter.date(from: $0) }.sorted()
     }
 
-    // Calculate money saved
+    // Calculate money saved based on days since quit (not check-in streak)
     private var moneySaved: String {
         let baselineWeeklySpending = 105.0 // $15/day fallback for users without data
         let effectiveSpending = weeklySpending > 0 ? weeklySpending : baselineWeeklySpending
         let dailySpending = effectiveSpending / 7.0
-        let totalSaved = dailySpending * Double(currentStreak)
+        let totalSaved = dailySpending * Double(daysSinceQuit)
         
         let formatter = NumberFormatter()
         formatter.numberStyle = .currency
@@ -114,10 +122,10 @@ struct ProgressTabView: View {
         return formatter.string(from: NSNumber(value: totalSaved)) ?? "$0"
     }
     
-    // Calculate time saved using frequency model shared with Home
+    // Calculate time saved based on days since quit (not check-in streak)
     private var timeSaved: String {
         let frequency = CannabisUseFrequency(storedValue: smokeFrequencyRaw)
-        let totalHours = max(0, Double(currentStreak) * frequency.estimatedHoursPerDay)
+        let totalHours = max(0, Double(daysSinceQuit) * frequency.estimatedHoursPerDay)
         
         if totalHours < 24 {
             return "\(Int(totalHours))h"
@@ -130,12 +138,12 @@ struct ProgressTabView: View {
         return "\(days)d \(remainingHours)h"
     }
     
-    // Days to next milestone
+    // Days to next milestone based on days since quit
     private var daysToNextMilestone: Int {
         let milestones = [7, 14, 30, 60, 90, 180, 365]
         for milestone in milestones {
-            if currentStreak < milestone {
-                return milestone - currentStreak
+            if daysSinceQuit < milestone {
+                return milestone - daysSinceQuit
             }
         }
         return 0
@@ -165,8 +173,8 @@ struct ProgressTabView: View {
                          (60, "60-day"), (90, "90-day"), (180, "6-month"), 
                          (365, "1-year")]
         for (days, name) in milestones {
-            if currentStreak < days {
-                return "\(days - currentStreak) days to your \(name) badge"
+            if daysSinceQuit < days {
+                return "\(days - daysSinceQuit) days to your \(name) badge"
             }
         }
         return "You've achieved all milestones! 🎉"
@@ -180,7 +188,7 @@ struct ProgressTabView: View {
             VStack(spacing: 0) {
                 // Header
                 HStack {
-                    LeafLogoView(size: 40)
+                    LeafLogoView(size: 56)
                     Text("Progress")
                         .font(.system(size: 28, weight: .bold))
                         .foregroundColor(.white)
@@ -376,8 +384,8 @@ private extension ProgressTabView {
     func reconcileStreakIfNeeded() {
         guard !lastCheckInDateString.isEmpty else {
             // No last check-in, ensure streak is 0 if no check-ins exist
-            if checkInDateStrings.isEmpty && checkInStreak != 0 {
-                checkInStreak = 0
+            if checkInDateStrings.isEmpty {
+                streakManager.validateStreak()
             }
             return
         }
@@ -391,8 +399,8 @@ private extension ProgressTabView {
         let delta = calendar.dateComponents([.day], from: lastDay, to: today).day ?? 0
         
         // If more than 1 day has passed since last check-in, reset streak
-        if delta > 1 && checkInStreak != 0 {
-            checkInStreak = 0
+        if delta > 1 {
+            streakManager.validateStreak()
         }
     }
 }

@@ -6,12 +6,14 @@
 //
 
 import SwiftUI
+import UIKit
 
 struct WelcomeScreenView: View {
     @State private var showLogo = false
     @State private var moveLogoUp = false
     @State private var showContent = false
     @State private var showButton = false
+    @State private var buttonScale: CGFloat = 1.0
     var onNext: () -> Void
     
     var body: some View {
@@ -23,7 +25,10 @@ struct WelcomeScreenView: View {
                 
                 VStack(spacing: 0) {
                     VStack(spacing: 20) {
-                        LeafLogoView(size: 140)
+                        Image("LeafLogo")
+                            .resizable()
+                            .aspectRatio(contentMode: .fit)
+                            .frame(width: 180, height: 180)
                             .opacity(showLogo ? 1 : 0)
                             .scaleEffect(showLogo ? 1 : 0.6)
                             .offset(y: moveLogoUp ? 0 : geometry.size.height * 0.18)
@@ -62,6 +67,8 @@ struct WelcomeScreenView: View {
                     Spacer(minLength: 40)
                     
                     Button(action: {
+                        let impactFeedback = UIImpactFeedbackGenerator(style: .medium)
+                        impactFeedback.impactOccurred()
                         withAnimation(.easeInOut(duration: 0.3)) {
                             onNext()
                         }
@@ -78,6 +85,12 @@ struct WelcomeScreenView: View {
                     .padding(.bottom, max(bottomInset, 24))
                     .opacity(showButton ? 1 : 0)
                     .offset(y: showButton ? 0 : 20)
+                    .scaleEffect(buttonScale)
+                    .onLongPressGesture(minimumDuration: 0, maximumDistance: .infinity, perform: {}, onPressingChanged: { pressing in
+                        withAnimation(.spring(response: 0.2, dampingFraction: 0.8)) {
+                            buttonScale = pressing ? 0.97 : 1.0
+                        }
+                    })
                 }
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
             }

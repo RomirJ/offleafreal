@@ -96,6 +96,102 @@
           "referenceName" : "Annual Premium",
           "subscriptionGroupID" : "21234567",
           "type" : "RecurringSubscription"
+        },
+        {
+          "adHocOffers" : [
+
+          ],
+          "codeOffers" : [
+
+          ],
+          "displayPrice" : "9.99",
+          "familyShareable" : false,
+          "groupNumber" : 1,
+          "internalID" : "6543210989",
+          "introductoryOffer" : {
+            "displayPrice" : "0",
+            "internalID" : "7654321100",
+            "numberOfPeriods" : 1,
+            "paymentMode" : "free",
+            "subscriptionPeriod" : "P3D",
+            "type" : "introductory"
+          },
+          "localizations" : [
+            {
+              "description" : "Unlock all features with monthly premium access",
+              "displayName" : "Offleaf Premium Monthly",
+              "locale" : "en_US"
+            }
+          ],
+          "productID" : "com.offleaf.promo.monthly",
+          "recurringSubscriptionPeriod" : "P1M",
+          "referenceName" : "Promotional Monthly",
+          "subscriptionGroupID" : "21234567",
+          "type" : "RecurringSubscription"
+        },
+        {
+          "adHocOffers" : [
+
+          ],
+          "codeOffers" : [
+
+          ],
+          "displayPrice" : "29.99",
+          "familyShareable" : false,
+          "groupNumber" : 1,
+          "internalID" : "6543210990",
+          "introductoryOffer" : {
+            "displayPrice" : "0",
+            "internalID" : "7654321101",
+            "numberOfPeriods" : 1,
+            "paymentMode" : "free",
+            "subscriptionPeriod" : "P3D",
+            "type" : "introductory"
+          },
+          "localizations" : [
+            {
+              "description" : "Best value - Save 80% with annual premium access",
+              "displayName" : "Offleaf Premium Annual",
+              "locale" : "en_US"
+            }
+          ],
+          "productID" : "com.offleaf.promo.annual",
+          "recurringSubscriptionPeriod" : "P1Y",
+          "referenceName" : "Promotional Annual",
+          "subscriptionGroupID" : "21234567",
+          "type" : "RecurringSubscription"
+        },
+        {
+          "adHocOffers" : [
+
+          ],
+          "codeOffers" : [
+
+          ],
+          "displayPrice" : "19.99",
+          "familyShareable" : false,
+          "groupNumber" : 1,
+          "internalID" : "6543210991",
+          "introductoryOffer" : {
+            "displayPrice" : "0",
+            "internalID" : "7654321102",
+            "numberOfPeriods" : 1,
+            "paymentMode" : "free",
+            "subscriptionPeriod" : "P3D",
+            "type" : "introductory"
+          },
+          "localizations" : [
+            {
+              "description" : "Special discount - Premium access for a full year",
+              "displayName" : "Offleaf Special Annual",
+              "locale" : "en_US"
+            }
+          ],
+          "productID" : "com.offleaf.special.annual",
+          "recurringSubscriptionPeriod" : "P1Y",
+          "referenceName" : "Special Annual",
+          "subscriptionGroupID" : "21234567",
+          "type" : "RecurringSubscription"
         }
       ]
     }

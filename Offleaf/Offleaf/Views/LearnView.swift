@@ -21,7 +21,7 @@ struct LearnView: View {
                 VStack(spacing: 24) {
                     // Header
                     HStack {
-                        LeafLogoView(size: 40)
+                        LeafLogoView(size: 56)
                         Text("Learn")
                             .font(.system(size: 28, weight: .bold))
                             .foregroundColor(.white)

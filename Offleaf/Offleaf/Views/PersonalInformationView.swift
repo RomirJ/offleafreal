@@ -65,7 +65,7 @@ struct PersonalInformationView: View {
                                     RoundedRectangle(cornerRadius: 12)
                                         .fill(Color.white.opacity(0.08))
                                 )
-                                .onChange(of: editedName) { _ in checkForChanges() }
+                                .onChange(of: editedName) { _, _ in checkForChanges() }
                         }
                         
                         // Quit Date
@@ -74,11 +74,11 @@ struct PersonalInformationView: View {
                                 .font(.system(size: 14, weight: .medium))
                                 .foregroundColor(.white.opacity(0.6))
                             
-                            DatePicker("", selection: $editedQuitDate, displayedComponents: .date)
+                            DatePicker("", selection: $editedQuitDate, in: ...Date(), displayedComponents: .date)
                                 .datePickerStyle(.compact)
                                 .labelsHidden()
                                 .colorScheme(.dark)
-                                .onChange(of: editedQuitDate) { checkForChanges() }
+                                .onChange(of: editedQuitDate) { _, _ in checkForChanges() }
                         }
                         
                         // Smoking Frequency
@@ -130,7 +130,13 @@ struct PersonalInformationView: View {
                                     .foregroundColor(.white)
                                     .tint(.white)
                                     .keyboardType(.decimalPad)
-                                    .onChange(of: editedSpending) { checkForChanges() }
+                                    .onChange(of: editedSpending) { _, newValue in 
+                                        let sanitized = sanitizeSpendingInput(newValue)
+                                        if sanitized != newValue {
+                                            editedSpending = sanitized
+                                        }
+                                        checkForChanges()
+                                    }
                             }
                             .padding(16)
                             .background(
@@ -189,14 +195,53 @@ struct PersonalInformationView: View {
     }
     
     private func saveChanges() {
-        userName = editedName
+        // Validate and clean name - don't allow empty
+        let trimmedName = editedName.trimmingCharacters(in: .whitespacesAndNewlines)
+        userName = trimmedName.isEmpty ? "Friend" : trimmedName
+        
         smokeFrequencyRaw = editedFrequency.rawValue
         // Validate spending amount - must be reasonable range
         let spendingAmount = Double(editedSpending) ?? 0
         let maxWeeklySpending = 5000.0
         weeklySpending = min(max(0, spendingAmount), maxWeeklySpending) // $0-$5000/week
-        quitDateString = ISO8601DateFormatter().string(from: editedQuitDate)
+        
+        // Validate quit date - can't be in future
+        let today = Calendar.current.startOfDay(for: Date())
+        let selectedDate = Calendar.current.startOfDay(for: editedQuitDate)
+        let validatedQuitDate = selectedDate > today ? today : editedQuitDate
+        quitDateString = ISO8601DateFormatter().string(from: validatedQuitDate)
+        
         dismiss()
+    }
+    
+    private func sanitizeSpendingInput(_ value: String) -> String {
+        // Remove any non-numeric characters except decimal point
+        var result = ""
+        var hasDecimal = false
+        var decimalPlaces = 0
+        
+        for char in value {
+            if char.isNumber {
+                if hasDecimal {
+                    decimalPlaces += 1
+                    if decimalPlaces <= 2 { // Limit to 2 decimal places
+                        result.append(char)
+                    }
+                } else {
+                    result.append(char)
+                }
+            } else if char == "." && !hasDecimal {
+                hasDecimal = true
+                result.append(char)
+            }
+        }
+        
+        // Validate range (max $5000/week)
+        if let amount = Double(result), amount > 5000 {
+            return "5000"
+        }
+        
+        return result
     }
 }
 

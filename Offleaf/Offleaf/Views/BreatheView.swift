@@ -266,7 +266,7 @@ struct BreatheView: View {
                 .animation(.easeOut(duration: 0.5).delay(0.5), value: showContent)
             }
         }
-        .navigationBarHidden(true)
+        .toolbar(.hidden, for: .navigationBar)
         .onAppear {
             showContent = true
             startBreathingAnimation()

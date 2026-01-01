@@ -13,9 +13,22 @@ struct AppLockView: View {
     
     @State private var passcode = ""
     @State private var error = ""
-    @State private var attempts = 0
     @State private var isShowingPasscode = false
-    @State private var lockoutEndTime: Date?
+    
+    // Persistent lockout using AppStorage
+    @AppStorage("lockoutAttempts") private var attempts = 0
+    @AppStorage("lockoutEndTimeInterval") private var lockoutEndTimeInterval: Double = 0
+    
+    private var lockoutEndTime: Date? {
+        lockoutEndTimeInterval > 0 ? Date(timeIntervalSince1970: lockoutEndTimeInterval) : nil
+    }
+    
+    private var isLockedOut: Bool {
+        if let lockoutEnd = lockoutEndTime {
+            return Date() < lockoutEnd
+        }
+        return false
+    }
     
     var body: some View {
         ZStack {
@@ -164,11 +177,11 @@ struct AppLockView: View {
                     isUnlocked = true
                 }
             } else {
-                // Fall back to passcode
-                isShowingPasscode = true
+                // Don't automatically fall back - show error instead
                 if error != nil {
-                    self.error = "Authentication failed"
+                    self.error = "Biometric authentication failed. Tap 'Enter Passcode' to use passcode."
                 }
+                // User must explicitly choose to use passcode
             }
         }
     }
@@ -193,18 +206,23 @@ struct AppLockView: View {
     
     private func validatePasscode() {
         // Check if currently locked out
-        if let lockoutEnd = lockoutEndTime, Date() < lockoutEnd {
+        if isLockedOut, let lockoutEnd = lockoutEndTime {
             let remaining = Int(lockoutEnd.timeIntervalSinceNow)
-            error = "Locked out. Try again in \(remaining) seconds"
-            passcode = ""
-            return
+            if remaining > 0 {
+                error = "Locked out. Try again in \(remaining) seconds"
+                passcode = ""
+                return
+            } else {
+                // Lockout expired, reset
+                lockoutEndTimeInterval = 0
+                attempts = 0
+            }
         }
         
-        if let storedPasscode = KeychainHelper.shared.getPasscode(),
-           passcode == storedPasscode {
+        if KeychainHelper.shared.verifyPasscode(passcode) {
             // Reset attempts on successful unlock
             attempts = 0
-            lockoutEndTime = nil
+            lockoutEndTimeInterval = 0
             withAnimation {
                 isUnlocked = true
             }
@@ -216,19 +234,19 @@ struct AppLockView: View {
             let impact = UIImpactFeedbackGenerator(style: .medium)
             impact.impactOccurred()
             
-            // Exponential backoff lockout
+            // Exponential backoff lockout with persistence
             switch attempts {
             case 3:
-                lockoutEndTime = Date().addingTimeInterval(60) // 1 minute
+                lockoutEndTimeInterval = Date().addingTimeInterval(60).timeIntervalSince1970 // 1 minute
                 error = "Too many attempts. Locked for 1 minute."
             case 5:
-                lockoutEndTime = Date().addingTimeInterval(300) // 5 minutes
+                lockoutEndTimeInterval = Date().addingTimeInterval(300).timeIntervalSince1970 // 5 minutes
                 error = "Too many attempts. Locked for 5 minutes."
             case 7:
-                lockoutEndTime = Date().addingTimeInterval(900) // 15 minutes
+                lockoutEndTimeInterval = Date().addingTimeInterval(900).timeIntervalSince1970 // 15 minutes
                 error = "Too many attempts. Locked for 15 minutes."
             case 10...:
-                lockoutEndTime = Date().addingTimeInterval(3600) // 1 hour
+                lockoutEndTimeInterval = Date().addingTimeInterval(3600).timeIntervalSince1970 // 1 hour
                 error = "Too many attempts. Locked for 1 hour."
             default:
                 error = "Incorrect passcode (\(attempts) attempt\(attempts == 1 ? "" : "s"))"

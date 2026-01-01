@@ -40,9 +40,25 @@ class WalkManager: ObservableObject {
     }
     
     func loadSessions() {
-        if let data = UserDefaults.standard.data(forKey: saveKey),
-           let decoded = try? JSONDecoder().decode([WalkSession].self, from: data) {
-            sessions = decoded
+        if let data = UserDefaults.standard.data(forKey: saveKey) {
+            do {
+                let decoded = try JSONDecoder().decode([WalkSession].self, from: data)
+                sessions = decoded
+            } catch {
+                print("[WalkTracker] ERROR: Failed to decode sessions: \(error)")
+                
+                // Try backup recovery
+                if let backupData = UserDefaults.standard.data(forKey: "\(saveKey)_backup"),
+                   let backupSessions = try? JSONDecoder().decode([WalkSession].self, from: backupData) {
+                    sessions = backupSessions
+                    save() // Re-save to main key
+                    print("[WalkTracker] Recovered \(sessions.count) sessions from backup")
+                } else {
+                    // Save corrupted data for debugging
+                    UserDefaults.standard.set(data, forKey: "\(saveKey)_corrupted")
+                    sessions = []
+                }
+            }
         }
     }
     
@@ -52,7 +68,8 @@ class WalkManager: ObservableObject {
             try AVAudioSession.sharedInstance().setCategory(.playback, mode: .default)
             try AVAudioSession.sharedInstance().setActive(true)
         } catch {
-            print("Failed to setup audio session: \(error)")
+            print("[WalkTracker] Audio setup error: \(error.localizedDescription)")
+            // Non-critical - walking can continue without audio
         }
         
         if let asset = NSDataAsset(name: "RelaxingGuitar") {
@@ -62,7 +79,8 @@ class WalkManager: ObservableObject {
                 audioPlayer?.volume = 0.6 // Set a comfortable volume
                 audioPlayer?.prepareToPlay()
             } catch {
-                print("Failed to load audio file: \(error)")
+                print("[WalkTracker] Audio loading error: \(error.localizedDescription)")
+                // Non-critical - walking features work without audio
             }
         }
     }
@@ -120,8 +138,26 @@ class WalkManager: ObservableObject {
     }
     
     private func save() {
-        if let encoded = try? JSONEncoder().encode(sessions) {
+        do {
+            // Create backup before saving
+            if let existingData = UserDefaults.standard.data(forKey: saveKey) {
+                UserDefaults.standard.set(existingData, forKey: "\(saveKey)_backup")
+            }
+            
+            let encoder = JSONEncoder()
+            encoder.outputFormatting = .prettyPrinted
+            encoder.dateEncodingStrategy = .iso8601
+            let encoded = try encoder.encode(sessions)
+            
             UserDefaults.standard.set(encoded, forKey: saveKey)
+            
+            // Verify save succeeded
+            if UserDefaults.standard.data(forKey: saveKey) == nil {
+                print("[WalkTracker] CRITICAL: Failed to save \(sessions.count) sessions")
+            }
+        } catch {
+            print("[WalkTracker] ERROR: Failed to encode \(sessions.count) sessions: \(error)")
+            // Keep existing data rather than losing it
         }
     }
     
@@ -355,7 +391,7 @@ struct WalkTrackerView: View {
                 }
             }
         }
-        .navigationBarHidden(true)
+        .toolbar(.hidden, for: .navigationBar)
         .onDisappear {
             walkManager.cancelActiveWalk()
         }

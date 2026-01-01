@@ -189,7 +189,7 @@ struct ThinkingOfRelapsingView: View {
                 }
             }
         }
-        .navigationBarHidden(true)
+        .toolbar(.hidden, for: .navigationBar)
         .fullScreenCover(isPresented: $showingBreathe) {
             BreatheView()
         }

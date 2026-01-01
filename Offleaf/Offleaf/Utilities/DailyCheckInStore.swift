@@ -94,19 +94,60 @@ enum DailyCheckInStore {
     private static let maxEntries = 60
 
     static func loadEntries() -> [DailyCheckInEntry] {
-        guard
-            let data = UserDefaults.standard.data(forKey: storageKey),
-            let decoded = try? JSONDecoder().decode([DailyCheckInEntry].self, from: data)
-        else {
+        // Use secure storage for sensitive health data
+        if let entries = SecureHealthDataStore.shared.loadSecureData([DailyCheckInEntry].self, for: storageKey) {
+            return entries
+        }
+        
+        // Fallback: migrate from UserDefaults if exists
+        guard let data = UserDefaults.standard.data(forKey: storageKey) else {
             return []
         }
-
-        return decoded
+        
+        do {
+            let decoded = try JSONDecoder().decode([DailyCheckInEntry].self, from: data)
+            
+            // Migrate to secure storage
+            if SecureHealthDataStore.shared.saveSecureData(decoded, for: storageKey) {
+                // Only remove from UserDefaults after successful migration
+                UserDefaults.standard.removeObject(forKey: storageKey)
+                print("[DailyCheckIn] Successfully migrated \(decoded.count) entries to secure storage")
+            } else {
+                print("[DailyCheckIn] WARNING: Failed to migrate to secure storage, keeping in UserDefaults")
+            }
+            
+            return decoded
+        } catch {
+            print("[DailyCheckIn] ERROR: Failed to decode check-in entries: \(error)")
+            
+            // Try to recover from backup
+            if let backupData = UserDefaults.standard.data(forKey: "\(storageKey)_backup"),
+               let backupEntries = try? JSONDecoder().decode([DailyCheckInEntry].self, from: backupData) {
+                print("[DailyCheckIn] Recovered \(backupEntries.count) entries from backup")
+                return backupEntries
+            }
+            
+            // Save corrupted data for debugging
+            UserDefaults.standard.set(data, forKey: "\(storageKey)_corrupted")
+            return []
+        }
     }
 
     static func saveEntries(_ entries: [DailyCheckInEntry]) {
-        guard let data = try? JSONEncoder().encode(entries) else { return }
-        UserDefaults.standard.set(data, forKey: storageKey)
+        // Create backup before saving
+        if let existingEntries = SecureHealthDataStore.shared.loadSecureData([DailyCheckInEntry].self, for: storageKey) {
+            _ = SecureHealthDataStore.shared.saveSecureData(existingEntries, for: "\(storageKey)_backup")
+        }
+        
+        // Save to secure keychain storage instead of UserDefaults
+        if !SecureHealthDataStore.shared.saveSecureData(entries, for: storageKey) {
+            print("[DailyCheckIn] CRITICAL: Failed to save \(entries.count) check-in entries to secure storage")
+            // Try to save to UserDefaults as fallback
+            if let encoded = try? JSONEncoder().encode(entries) {
+                UserDefaults.standard.set(encoded, forKey: "\(storageKey)_fallback")
+                print("[DailyCheckIn] Saved to fallback storage")
+            }
+        }
     }
 
     static func append(_ entry: DailyCheckInEntry) {

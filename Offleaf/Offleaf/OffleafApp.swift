@@ -7,14 +7,23 @@
 
 import SwiftUI
 import UserNotifications
+import BackgroundTasks
 
 @main
 struct OffleafApp: App {
     @AppStorage("hasCompletedOnboarding") private var hasCompletedOnboarding = false
+    @Environment(\.scenePhase) var scenePhase
     private let notificationManager = NotificationManager.shared
+    private let backgroundTaskManager = BackgroundTaskManager.shared
     
     init() {
         setupNotifications()
+        setupBackgroundTasks()
+        // Migrate dates from UTC to local timezone if needed
+        DateMigrationHelper.migrateIfNeeded()
+        
+        // Force portrait orientation
+        UIDevice.current.setValue(UIInterfaceOrientation.portrait.rawValue, forKey: "orientation")
     }
     
     var body: some Scene {
@@ -29,8 +38,27 @@ struct OffleafApp: App {
             .onAppear {
                 // Check for missed milestones when app launches
                 notificationManager.checkAndRescheduleMissedMilestones()
+                // Validate streak when app launches
+                StreakManager.shared.validateStreak()
+            }
+            .onChange(of: scenePhase) { oldPhase, newPhase in
+                switch newPhase {
+                case .background:
+                    // Schedule background tasks when entering background
+                    backgroundTaskManager.scheduleAppRefresh()
+                    backgroundTaskManager.scheduleNotificationRefresh()
+                case .active:
+                    // Validate streak when becoming active
+                    StreakManager.shared.validateStreak()
+                default:
+                    break
+                }
             }
         }
+    }
+    
+    private func setupBackgroundTasks() {
+        backgroundTaskManager.registerBackgroundTasks()
     }
     
     private func setupNotifications() {

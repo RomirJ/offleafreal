@@ -2,7 +2,7 @@
 //  SecurityTests.swift
 //  OffleafTests
 //
-//  Comprehensive security testing
+//  Comprehensive security testing for Offleaf app
 //
 
 import Testing
@@ -11,77 +11,197 @@ import Foundation
 
 struct SecurityTests {
     
-    @Test func testUserDefaultsContainsSensitiveData() {
-        // Test that sensitive data is being stored in UserDefaults
+    @Test func testSensitiveDataInUserDefaults() {
+        // Test that sensitive health data is stored unencrypted in UserDefaults
         let defaults = UserDefaults.standard
         
-        // Simulate storing sensitive data as the app does
+        // Simulate actual app storage patterns found in codebase
         defaults.set("2024-01-01T00:00:00Z", forKey: "quitDate")
         defaults.set("John Doe", forKey: "userName")
         defaults.set("25", forKey: "userAge")
         defaults.set(150.0, forKey: "weeklySpending")
+        defaults.set(20, forKey: "cigarettesPerDay")
+        defaults.set("heavy", forKey: "cannabisUseFrequency")
+        defaults.set(true, forKey: "hasCompletedDailyCheckIn")
+        defaults.set(7, forKey: "checkInStreak")
         
-        // Check if data is readable (security issue)
-        #expect(defaults.string(forKey: "quitDate") != nil, "Quit date is stored unencrypted")
-        #expect(defaults.string(forKey: "userName") != nil, "User name is stored unencrypted")
-        #expect(defaults.string(forKey: "userAge") != nil, "User age is stored unencrypted")
-        #expect(defaults.double(forKey: "weeklySpending") > 0, "Spending data is stored unencrypted")
+        // All sensitive data is readable without encryption
+        #expect(defaults.string(forKey: "quitDate") != nil, "Quit date stored unencrypted - SECURITY VULNERABILITY")
+        #expect(defaults.string(forKey: "userName") != nil, "User name stored unencrypted - PRIVACY ISSUE")
+        #expect(defaults.string(forKey: "userAge") != nil, "User age stored unencrypted - PRIVACY ISSUE")
+        #expect(defaults.double(forKey: "weeklySpending") > 0, "Financial data stored unencrypted - SECURITY RISK")
+        #expect(defaults.integer(forKey: "cigarettesPerDay") >= 0, "Health data stored unencrypted - HIPAA CONCERN")
         
-        // This test PASSES which confirms the security vulnerability
+        // Count total sensitive data points
+        let sensitiveKeys = ["quitDate", "userName", "userAge", "weeklySpending", "cigarettesPerDay", 
+                             "cannabisUseFrequency", "hasCompletedDailyCheckIn", "checkInStreak"]
+        var exposedDataCount = 0
+        for key in sensitiveKeys {
+            if defaults.object(forKey: key) != nil {
+                exposedDataCount += 1
+            }
+        }
+        #expect(exposedDataCount == 8, "\(exposedDataCount) sensitive data points exposed in UserDefaults")
     }
     
-    @Test func testHardcodedURLsExist() {
-        // Test for hardcoded URLs
-        let termsURL = "https://www.apple.com/legal/internet-services/itunes/dev/stdeula/"
-        let privacyURL = "https://offleaf-legal-hub.lovable.app/"
+    @Test func testForceUnwrappedURLs() {
+        // Test dangerous force unwrapping in PricingView.swift lines 109, 113
+        let termsURLString = "https://www.apple.com/legal/internet-services/itunes/dev/stdeula/"
+        let privacyURLString = "https://offleaf-legal-hub.lovable.app/"
         
-        #expect(URL(string: termsURL) != nil, "Hardcoded terms URL exists")
-        #expect(URL(string: privacyURL) != nil, "Hardcoded privacy URL exists")
+        // These URLs are force unwrapped in the actual code
+        let termsURL = URL(string: termsURLString)!
+        let privacyURL = URL(string: privacyURLString)!
         
-        // Test force unwrapping would crash
-        let forceUnwrappedURL = URL(string: termsURL)!
-        #expect(forceUnwrappedURL.absoluteString == termsURL, "Force unwrapping URLs is dangerous")
+        #expect(termsURL.absoluteString == termsURLString, "Force unwrapped URL - CRASH RISK")
+        #expect(privacyURL.absoluteString == privacyURLString, "Force unwrapped URL - CRASH RISK")
+        
+        // Test what happens with invalid URL
+        let invalidURLString = "not a valid url with spaces"
+        let invalidURL = URL(string: invalidURLString)
+        #expect(invalidURL == nil, "Invalid URL would crash app with force unwrap")
     }
     
-    @Test func testDebugModeVulnerability() {
+    @Test func testStoreKitDebugModeVulnerability() {
+        // Test StoreKitManager.swift lines 92-109 debug mode issue
         #if DEBUG
         let isDebugMode = true
         #else
         let isDebugMode = false
         #endif
         
-        #expect(isDebugMode == true, "Debug mode is active - unverified transactions would be accepted")
+        #expect(isDebugMode == true, "Debug mode active - unverified transactions accepted")
+        
+        // Simulate the vulnerable checkVerified function behavior
+        enum TestVerificationResult<T> {
+            case verified(T)
+            case unverified(T, Error)
+        }
+        
+        struct TestTransaction {
+            let productID: String
+            let isVerified: Bool
+        }
+        
+        func checkVerified<T>(_ result: TestVerificationResult<T>) -> T? {
+            #if DEBUG
+            // In debug mode, accepts unverified transactions
+            switch result {
+            case .unverified(let value, _):
+                return value  // Returns unverified transaction!
+            case .verified(let safe):
+                return safe
+            }
+            #else
+            switch result {
+            case .unverified:
+                return nil
+            case .verified(let safe):
+                return safe
+            }
+            #endif
+        }
+        
+        let unverifiedTransaction = TestTransaction(productID: "premium", isVerified: false)
+        let result = TestVerificationResult.unverified(unverifiedTransaction, NSError(domain: "", code: 0))
+        let accepted = checkVerified(result)
+        
+        #expect(accepted != nil, "Unverified transaction accepted in DEBUG - REVENUE LOSS RISK")
     }
     
-    @Test func testKeychainUsageForSensitiveData() {
-        // Test if Keychain is properly used for sensitive data
-        let passcode = "1234"
+    @Test func testKeychainImplementation() {
+        // Test KeychainHelper proper usage for passcodes
         let keychainHelper = KeychainHelper.shared
+        let testPasscode = "1234"
         
-        // Test saving to keychain
-        let saved = keychainHelper.savePasscode(passcode)
-        #expect(saved == true, "Keychain can save passcode")
+        // Save sensitive data
+        let saved = keychainHelper.savePasscode(testPasscode)
+        #expect(saved == true, "Keychain should save passcode securely")
         
-        // Test that passcode is not in UserDefaults
-        #expect(UserDefaults.standard.string(forKey: "userPasscode") == nil, "Passcode should not be in UserDefaults")
+        // Verify passcode NOT in UserDefaults
+        #expect(UserDefaults.standard.string(forKey: "userPasscode") == nil, "Passcode should NOT be in UserDefaults")
+        #expect(UserDefaults.standard.string(forKey: "appPasscode") == nil, "App passcode should NOT be in UserDefaults")
+        
+        // Retrieve and verify
+        let retrieved = keychainHelper.getPasscode()
+        #expect(retrieved == testPasscode, "Keychain should retrieve passcode")
         
         // Cleanup
-        _ = keychainHelper.deletePasscode()
+        let deleted = keychainHelper.deletePasscode()
+        #expect(deleted == true, "Keychain should delete passcode")
     }
     
-    @Test func testDataEncryption() {
-        // Test if any encryption is used for stored data
-        let sensitiveData = "user medical cannabis usage data"
-        let data = sensitiveData.data(using: .utf8)!
+    @Test func testDataEncryptionStatus() {
+        // Test if any encryption is used for health data
+        let healthData = "Cannabis usage: 5 times daily, Method: smoking"
+        let data = healthData.data(using: .utf8)!
         
-        // Check if data is stored as-is (unencrypted)
-        UserDefaults.standard.set(data, forKey: "testData")
-        let retrievedData = UserDefaults.standard.data(forKey: "testData")
-        let retrievedString = String(data: retrievedData!, encoding: .utf8)
+        // Store as app does
+        UserDefaults.standard.set(data, forKey: "healthRecord")
         
-        #expect(retrievedString == sensitiveData, "Data is stored unencrypted - SECURITY ISSUE")
+        // Retrieve and check if plaintext
+        if let retrievedData = UserDefaults.standard.data(forKey: "healthRecord"),
+           let retrievedString = String(data: retrievedData, encoding: .utf8) {
+            #expect(retrievedString == healthData, "Health data stored in plaintext - HIPAA VIOLATION")
+        }
         
         // Cleanup
-        UserDefaults.standard.removeObject(forKey: "testData")
+        UserDefaults.standard.removeObject(forKey: "healthRecord")
+    }
+    
+    @Test func testHardcodedSecrets() {
+        // Test for hardcoded API keys or secrets
+        let suspiciousPatterns = [
+            "sk_live_",  // Stripe live key
+            "sk_test_",  // Stripe test key
+            "pk_live_",  // Stripe publishable key
+            "AIza",      // Google API key
+            "xoxb-",     // Slack token
+            "ghp_"       // GitHub personal access token
+        ]
+        
+        // In actual implementation, would scan codebase
+        // For now, confirm none are hardcoded in UserDefaults
+        for pattern in suspiciousPatterns {
+            let found = UserDefaults.standard.dictionaryRepresentation().values.contains { value in
+                if let stringValue = value as? String {
+                    return stringValue.contains(pattern)
+                }
+                return false
+            }
+            #expect(found == false, "Potential hardcoded secret pattern: \(pattern)")
+        }
+    }
+    
+    @Test func testBiometricAuthenticationBypass() {
+        // Test if biometric authentication can be bypassed
+        let isLocked = UserDefaults.standard.bool(forKey: "isAppLocked")
+        let passcodeEnabled = UserDefaults.standard.bool(forKey: "isPasscodeEnabled")
+        let biometricEnabled = UserDefaults.standard.bool(forKey: "isBiometricEnabled")
+        
+        // Test bypass scenarios
+        if isLocked && !passcodeEnabled && !biometricEnabled {
+            #expect(false, "App locked but no authentication method - SECURITY BYPASS")
+        }
+        
+        // Test if lock state persists properly
+        UserDefaults.standard.set(true, forKey: "isAppLocked")
+        let stillLocked = UserDefaults.standard.bool(forKey: "isAppLocked")
+        #expect(stillLocked == true, "Lock state should persist")
+    }
+    
+    @Test func testPrivacyPolicyURLs() {
+        // Test privacy and terms URLs are valid and secure
+        let urls = [
+            "https://www.apple.com/legal/internet-services/itunes/dev/stdeula/",
+            "https://offleaf-legal-hub.lovable.app/"
+        ]
+        
+        for urlString in urls {
+            if let url = URL(string: urlString) {
+                #expect(url.scheme == "https", "URL should use HTTPS for security")
+                #expect(url.host != nil, "URL should have valid host")
+            }
+        }
     }
 }

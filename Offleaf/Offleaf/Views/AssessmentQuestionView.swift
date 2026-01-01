@@ -6,9 +6,11 @@
 //
 
 import SwiftUI
+import UIKit
 
 struct OnboardingProgressBar: View {
     var progress: Double
+    @State private var animatedProgress: Double = 0
     
     private var clampedProgress: Double {
         min(max(progress, 0), 1)
@@ -20,8 +22,21 @@ struct OnboardingProgressBar: View {
                 RoundedRectangle(cornerRadius: 4)
                     .fill(Color.gray.opacity(0.3))
                 RoundedRectangle(cornerRadius: 4)
-                    .fill(Color.green)
-                    .frame(width: geometry.size.width * clampedProgress)
+                    .fill(LinearGradient(
+                        colors: [Color.green, Color.green.opacity(0.8)],
+                        startPoint: .leading,
+                        endPoint: .trailing
+                    ))
+                    .frame(width: geometry.size.width * animatedProgress)
+                    .animation(.spring(response: 0.6, dampingFraction: 0.8), value: animatedProgress)
+            }
+        }
+        .onAppear {
+            animatedProgress = clampedProgress
+        }
+        .onChange(of: progress) { oldValue, newValue in
+            withAnimation(.spring(response: 0.6, dampingFraction: 0.8)) {
+                animatedProgress = clampedProgress
             }
         }
     }
@@ -30,6 +45,9 @@ struct OnboardingProgressBar: View {
 struct AssessmentQuestionView: View {
     let progress: Double
     @State private var selectedFrequency: CannabisUseFrequency?
+    @State private var showQuestion = false
+    @State private var showOptions: [Bool] = Array(repeating: false, count: 6)
+    @State private var buttonScale: [CGFloat] = Array(repeating: 1.0, count: 6)
     @AppStorage("smokeFrequency") private var smokeFrequencyRaw = CannabisUseFrequency.unknown.rawValue
     var onComplete: () -> Void
     
@@ -57,16 +75,30 @@ struct AssessmentQuestionView: View {
                             .multilineTextAlignment(.leading)
                             .fixedSize(horizontal: false, vertical: true)
                             .padding(.top, 36)
+                            .opacity(showQuestion ? 1 : 0)
+                            .offset(y: showQuestion ? 0 : 20)
                         
                         VStack(spacing: 16) {
-                            ForEach(options, id: \.self) { option in
+                            ForEach(Array(options.enumerated()), id: \.element) { index, option in
                                 Button(action: {
+                                    withAnimation(.spring(response: 0.2, dampingFraction: 0.8)) {
+                                        buttonScale[index] = 0.97
+                                    }
+                                    
+                                    let impactFeedback = UIImpactFeedbackGenerator(style: .light)
+                                    impactFeedback.impactOccurred()
+                                    
                                     selectedFrequency = option
                                     smokeFrequencyRaw = option.rawValue
+                                    
                                     DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
-                                        withAnimation(.spring(response: 0.35, dampingFraction: 0.9)) {
-                                            onComplete()
+                                        withAnimation(.spring(response: 0.2, dampingFraction: 0.8)) {
+                                            buttonScale[index] = 1.0
                                         }
+                                    }
+                                    
+                                    DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) {
+                                        onComplete()
                                     }
                                 }) {
                                     Text(option.assessmentLabel)
@@ -89,6 +121,9 @@ struct AssessmentQuestionView: View {
                                                 )
                                                 .cornerRadius(35)
                                         )
+                                        .scaleEffect(buttonScale[index])
+                                        .opacity(showOptions[index] ? 1 : 0)
+                                        .offset(y: showOptions[index] ? 0 : 10)
                                 }
                             }
                         }
@@ -102,6 +137,21 @@ struct AssessmentQuestionView: View {
                 .padding(.bottom, max(bottomInset, 40))
             }
         }
+        .onAppear {
+            // Animate question appearance
+            withAnimation(.spring(response: 0.5, dampingFraction: 0.8).delay(0.1)) {
+                showQuestion = true
+            }
+            
+            // Stagger option appearances
+            for index in 0..<options.count {
+                withAnimation(.spring(response: 0.4, dampingFraction: 0.85).delay(Double(index) * 0.05 + 0.3)) {
+                    if index < showOptions.count {
+                        showOptions[index] = true
+                    }
+                }
+            }
+        }
     }
 }
 
@@ -109,6 +159,9 @@ struct AssessmentQuestionView: View {
 struct AssessmentQuestion2View: View {
     let progress: Double
     @State private var selectedReason: CannabisUseReason?
+    @State private var showQuestion = false
+    @State private var showOptions: [Bool] = Array(repeating: false, count: 6)
+    @State private var buttonScale: [CGFloat] = Array(repeating: 1.0, count: 6)
     @AppStorage("assessmentPrimaryUseReason") private var primaryUseReasonRaw = ""
     var onComplete: () -> Void
     var onBack: (() -> Void)?
@@ -149,14 +202,26 @@ struct AssessmentQuestion2View: View {
                         .padding(.top, 50)
                     
                     VStack(spacing: 16) {
-                        ForEach(options, id: \.self) { option in
+                        ForEach(Array(options.enumerated()), id: \.element) { index, option in
                             Button(action: {
+                                withAnimation(.spring(response: 0.2, dampingFraction: 0.8)) {
+                                    buttonScale[index] = 0.97
+                                }
+                                
+                                let impactFeedback = UIImpactFeedbackGenerator(style: .light)
+                                impactFeedback.impactOccurred()
+                                
                                 selectedReason = option
                                 primaryUseReasonRaw = option.rawValue
+                                
                                 DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
-                                    withAnimation(.spring(response: 0.35, dampingFraction: 0.9)) {
-                                        onComplete()
+                                    withAnimation(.spring(response: 0.2, dampingFraction: 0.8)) {
+                                        buttonScale[index] = 1.0
                                     }
+                                }
+                                
+                                DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) {
+                                    onComplete()
                                 }
                             }) {
                                 Text(option.displayName)
@@ -179,6 +244,9 @@ struct AssessmentQuestion2View: View {
                                             )
                                             .cornerRadius(35)
                                     )
+                                    .scaleEffect(buttonScale[index])
+                                    .opacity(showOptions[index] ? 1 : 0)
+                                    .offset(y: showOptions[index] ? 0 : 10)
                             }
                         }
                     }
@@ -188,38 +256,33 @@ struct AssessmentQuestion2View: View {
                 Spacer()
             }
         }
+        .onAppear {
+            withAnimation(.spring(response: 0.5, dampingFraction: 0.8).delay(0.1)) {
+                showQuestion = true
+            }
+            
+            for index in 0..<options.count {
+                withAnimation(.spring(response: 0.4, dampingFraction: 0.85).delay(Double(index) * 0.05 + 0.3)) {
+                    if index < showOptions.count {
+                        showOptions[index] = true
+                    }
+                }
+            }
+        }
     }
 }
 
 struct AssessmentQuestion3View: View {
     let progress: Double
-    @State private var spendingAmount: String = ""
+    @State private var selectedAmount: Int = 30
     @AppStorage("weeklySpending") private var weeklySpending: Double = 0
-    @FocusState private var isFocused: Bool
-    @State private var keyboardHeight: CGFloat = 0
     var onComplete: () -> Void
     var onBack: (() -> Void)?
-    
-    private static let amountFormatter: NumberFormatter = {
-        let formatter = NumberFormatter()
-        formatter.numberStyle = .decimal
-        formatter.maximumFractionDigits = 2
-        formatter.minimumFractionDigits = 0
-        formatter.usesGroupingSeparator = false
-        formatter.locale = Locale.current
-        return formatter
-    }()
-    
-    private var amountFormatter: NumberFormatter { Self.amountFormatter }
-    private var decimalSeparator: String { amountFormatter.decimalSeparator ?? "." }
     
     var body: some View {
         ZStack {
             Color.black
                 .ignoresSafeArea()
-                .onTapGesture {
-                    isFocused = false
-                }
             
             VStack(spacing: 0) {
                 // Header with back button, progress bar, and skip
@@ -241,127 +304,55 @@ struct AssessmentQuestion3View: View {
                 .padding(.horizontal, 20)
                 .padding(.top, 60)
                 
-                VStack(alignment: .leading, spacing: 40) {
+                VStack(spacing: 30) {
                     Text("On average, how much money do you typically spend on cannabis per week?")
                         .font(.system(size: 34, weight: .bold))
                         .foregroundColor(.white)
                         .multilineTextAlignment(.leading)
                         .fixedSize(horizontal: false, vertical: true)
+                        .padding(.horizontal, 24)
                         .padding(.top, 50)
                     
-                    // Input field
-                    HStack(spacing: 8) {
-                        Text("$")
-                            .font(.system(size: 20, weight: .medium))
-                            .foregroundColor(.white.opacity(0.7))
-                            .padding(.leading, 20)
-                        
-                        TextField("", text: $spendingAmount, prompt: Text("Enter your answer").foregroundColor(.white.opacity(0.4)))
-                            .font(.system(size: 20, weight: .regular))
-                            .foregroundColor(.white)
-                            .keyboardType(.decimalPad)
-                            .focused($isFocused)
-                            .padding(.trailing, 20)
-                            .onAppear {
-                                DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {
-                                    isFocused = true
-                                }
-                            }
-                            .onChange(of: spendingAmount) { newValue in
-                                let sanitized = sanitizedAmount(newValue)
-                                if sanitized != newValue {
-                                    spendingAmount = sanitized
-                                }
-                            }
-                    }
-                    .frame(height: 60)
-                    .background(
-                        RoundedRectangle(cornerRadius: 30)
-                            .stroke(isFocused ? Color.green : Color(red: 0.3, green: 0.7, blue: 0.4).opacity(0.6), lineWidth: isFocused ? 2 : 1.5)
-                            .background(
-                                RoundedRectangle(cornerRadius: 30)
-                                    .fill(Color.white.opacity(0.05))
-                            )
-                    )
+                    // Money picker
+                    MoneyPickerView(selectedAmount: $selectedAmount)
+                        .frame(height: 300)
                 }
-                .padding(.horizontal, 24)
                 
                 Spacer()
                 
-                // Done button when keyboard is visible
-                if isFocused {
-                    Button(action: {
-                        isFocused = false
-                    }) {
-                        Text("Done")
-                            .font(.system(size: 17, weight: .semibold))
-                            .foregroundColor(.black)
-                            .frame(maxWidth: .infinity)
-                            .frame(height: 50)
-                            .background(Color(red: 0.3, green: 0.7, blue: 0.4))
-                            .cornerRadius(25)
-                    }
-                    .padding(.horizontal, 24)
-                    .padding(.bottom, 10)
-                    .transition(.move(edge: .bottom).combined(with: .opacity))
-                }
-                
-                // Next button - only enabled when an amount is entered
+                // Next button
                 Button(action: {
-                    // Save the weekly spending amount with validation
-                    if let amount = amountFormatter.number(from: spendingAmount)?.doubleValue {
-                        // Validate reasonable spending range ($0 - $5000 per week)
-                        let maxWeeklySpending = 5000.0
-                        let validatedAmount = min(max(0, amount), maxWeeklySpending)
-                        weeklySpending = validatedAmount
-                    }
-                    isFocused = false
+                    // Save the weekly spending amount
+                    weeklySpending = Double(selectedAmount)
                     onComplete()
                 }) {
                     Text("Next")
                         .font(.system(size: 18, weight: .semibold))
-                        .foregroundColor(!spendingAmount.isEmpty ? .black : .gray)
+                        .foregroundColor(.black)
                         .frame(maxWidth: .infinity)
                         .frame(height: 56)
-                        .background(!spendingAmount.isEmpty ? Color.white : Color.gray.opacity(0.3))
+                        .background(Color.white)
                         .cornerRadius(28)
                 }
                 .padding(.horizontal, 24)
-                .disabled(spendingAmount.isEmpty)
                 .padding(.bottom, 50)
             }
         }
-        .onTapGesture {
-            isFocused = false
-        }
-        .animation(.spring(response: 0.3, dampingFraction: 0.8), value: isFocused)
-        .onAppear(perform: initializeAmount)
-    }
-}
-
-private extension AssessmentQuestion3View {
-    func initializeAmount() {
-        guard spendingAmount.isEmpty, weeklySpending > 0 else { return }
-        spendingAmount = amountFormatter.string(from: NSNumber(value: weeklySpending)) ?? ""
-    }
-    
-    func sanitizedAmount(_ value: String) -> String {
-        var result = ""
-        var hasSeparator = false
-        for character in value {
-            if character.isWholeNumber {
-                result.append(character)
-            } else if String(character) == decimalSeparator && !hasSeparator {
-                hasSeparator = true
-                result.append(character)
+        .onAppear {
+            // Initialize selectedAmount from saved value
+            if weeklySpending > 0 {
+                // Round to nearest $5 increment
+                selectedAmount = Int(round(weeklySpending / 5) * 5)
             }
         }
-        return result
     }
 }
 
 struct AssessmentQuestion4View: View {
     @State private var selectedResponse: AssessmentBinaryResponse?
+    @State private var showQuestion = false
+    @State private var showOptions: [Bool] = Array(repeating: false, count: 2)
+    @State private var buttonScale: [CGFloat] = Array(repeating: 1.0, count: 2)
     @AppStorage("assessmentTimeSpentObtaining") private var timeInvestmentRaw = AssessmentBinaryResponse.unanswered.rawValue
     var onComplete: () -> Void
     var onBack: (() -> Void)?
@@ -409,13 +400,29 @@ struct AssessmentQuestion4View: View {
                         .multilineTextAlignment(.leading)
                         .fixedSize(horizontal: false, vertical: true)
                         .padding(.top, 50)
+                        .opacity(showQuestion ? 1 : 0)
+                        .offset(y: showQuestion ? 0 : 20)
                     
                     VStack(spacing: 16) {
-                        ForEach([AssessmentBinaryResponse.yes, .no], id: \.self) { response in
+                        ForEach(Array([AssessmentBinaryResponse.yes, .no].enumerated()), id: \.element) { index, response in
                             Button(action: {
+                                withAnimation(.spring(response: 0.2, dampingFraction: 0.8)) {
+                                    buttonScale[index] = 0.97
+                                }
+                                
+                                let impactFeedback = UIImpactFeedbackGenerator(style: .light)
+                                impactFeedback.impactOccurred()
+                                
                                 selectedResponse = response
                                 timeInvestmentRaw = response.rawValue
+                                
                                 DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
+                                    withAnimation(.spring(response: 0.2, dampingFraction: 0.8)) {
+                                        buttonScale[index] = 1.0
+                                    }
+                                }
+                                
+                                DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) {
                                     onComplete()
                                 }
                             }) {
@@ -435,6 +442,9 @@ struct AssessmentQuestion4View: View {
                                                 lineWidth: selectedResponse == response ? 2 : 1.5
                                             )
                                     )
+                                    .scaleEffect(buttonScale[index])
+                                    .opacity(showOptions[index] ? 1 : 0)
+                                    .offset(y: showOptions[index] ? 0 : 10)
                             }
                         }
                     }
@@ -444,11 +454,29 @@ struct AssessmentQuestion4View: View {
                 Spacer()
             }
         }
+        .onAppear {
+            // Animate question appearance
+            withAnimation(.spring(response: 0.5, dampingFraction: 0.8).delay(0.1)) {
+                showQuestion = true
+            }
+            
+            // Stagger option appearances
+            for index in 0..<2 {
+                withAnimation(.spring(response: 0.4, dampingFraction: 0.85).delay(Double(index) * 0.05 + 0.3)) {
+                    if index < showOptions.count {
+                        showOptions[index] = true
+                    }
+                }
+            }
+        }
     }
 }
 
 struct AssessmentQuestion5View: View {
     @State private var selectedResponse: AssessmentBinaryResponse?
+    @State private var showQuestion = false
+    @State private var showOptions: [Bool] = Array(repeating: false, count: 2)
+    @State private var buttonScale: [CGFloat] = Array(repeating: 1.0, count: 2)
     @AppStorage("assessmentStrongCravings") private var strongCravingsRaw = AssessmentBinaryResponse.unanswered.rawValue
     var onComplete: () -> Void
     var onBack: (() -> Void)?
@@ -496,13 +524,29 @@ struct AssessmentQuestion5View: View {
                         .multilineTextAlignment(.leading)
                         .fixedSize(horizontal: false, vertical: true)
                         .padding(.top, 50)
+                        .opacity(showQuestion ? 1 : 0)
+                        .offset(y: showQuestion ? 0 : 20)
                     
                     VStack(spacing: 16) {
-                        ForEach([AssessmentBinaryResponse.yes, .no], id: \.self) { response in
+                        ForEach(Array([AssessmentBinaryResponse.yes, .no].enumerated()), id: \.element) { index, response in
                             Button(action: {
+                                withAnimation(.spring(response: 0.2, dampingFraction: 0.8)) {
+                                    buttonScale[index] = 0.97
+                                }
+                                
+                                let impactFeedback = UIImpactFeedbackGenerator(style: .light)
+                                impactFeedback.impactOccurred()
+                                
                                 selectedResponse = response
                                 strongCravingsRaw = response.rawValue
+                                
                                 DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
+                                    withAnimation(.spring(response: 0.2, dampingFraction: 0.8)) {
+                                        buttonScale[index] = 1.0
+                                    }
+                                }
+                                
+                                DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) {
                                     onComplete()
                                 }
                             }) {
@@ -522,6 +566,9 @@ struct AssessmentQuestion5View: View {
                                                 lineWidth: selectedResponse == response ? 2 : 1.5
                                             )
                                     )
+                                    .scaleEffect(buttonScale[index])
+                                    .opacity(showOptions[index] ? 1 : 0)
+                                    .offset(y: showOptions[index] ? 0 : 10)
                             }
                         }
                     }
@@ -531,11 +578,29 @@ struct AssessmentQuestion5View: View {
                 Spacer()
             }
         }
+        .onAppear {
+            // Animate question appearance
+            withAnimation(.spring(response: 0.5, dampingFraction: 0.8).delay(0.1)) {
+                showQuestion = true
+            }
+            
+            // Stagger option appearances
+            for index in 0..<2 {
+                withAnimation(.spring(response: 0.4, dampingFraction: 0.85).delay(Double(index) * 0.05 + 0.3)) {
+                    if index < showOptions.count {
+                        showOptions[index] = true
+                    }
+                }
+            }
+        }
     }
 }
 
 struct AssessmentQuestion6View: View {
     @State private var selectedResponse: AssessmentBinaryResponse?
+    @State private var showQuestion = false
+    @State private var showOptions: [Bool] = Array(repeating: false, count: 2)
+    @State private var buttonScale: [CGFloat] = Array(repeating: 1.0, count: 2)
     @AppStorage("assessmentLostInterest") private var lostInterestRaw = AssessmentBinaryResponse.unanswered.rawValue
     var onComplete: () -> Void
     var onBack: (() -> Void)?
@@ -583,13 +648,29 @@ struct AssessmentQuestion6View: View {
                         .multilineTextAlignment(.leading)
                         .fixedSize(horizontal: false, vertical: true)
                         .padding(.top, 50)
+                        .opacity(showQuestion ? 1 : 0)
+                        .offset(y: showQuestion ? 0 : 20)
                     
                     VStack(spacing: 16) {
-                        ForEach([AssessmentBinaryResponse.yes, .no], id: \.self) { response in
+                        ForEach(Array([AssessmentBinaryResponse.yes, .no].enumerated()), id: \.element) { index, response in
                             Button(action: {
+                                withAnimation(.spring(response: 0.2, dampingFraction: 0.8)) {
+                                    buttonScale[index] = 0.97
+                                }
+                                
+                                let impactFeedback = UIImpactFeedbackGenerator(style: .light)
+                                impactFeedback.impactOccurred()
+                                
                                 selectedResponse = response
                                 lostInterestRaw = response.rawValue
+                                
                                 DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
+                                    withAnimation(.spring(response: 0.2, dampingFraction: 0.8)) {
+                                        buttonScale[index] = 1.0
+                                    }
+                                }
+                                
+                                DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) {
                                     onComplete()
                                 }
                             }) {
@@ -609,6 +690,9 @@ struct AssessmentQuestion6View: View {
                                                 lineWidth: selectedResponse == response ? 2 : 1.5
                                             )
                                     )
+                                    .scaleEffect(buttonScale[index])
+                                    .opacity(showOptions[index] ? 1 : 0)
+                                    .offset(y: showOptions[index] ? 0 : 10)
                             }
                         }
                     }
@@ -618,11 +702,29 @@ struct AssessmentQuestion6View: View {
                 Spacer()
             }
         }
+        .onAppear {
+            // Animate question appearance
+            withAnimation(.spring(response: 0.5, dampingFraction: 0.8).delay(0.1)) {
+                showQuestion = true
+            }
+            
+            // Stagger option appearances
+            for index in 0..<2 {
+                withAnimation(.spring(response: 0.4, dampingFraction: 0.85).delay(Double(index) * 0.05 + 0.3)) {
+                    if index < showOptions.count {
+                        showOptions[index] = true
+                    }
+                }
+            }
+        }
     }
 }
 
 struct AssessmentQuestion7View: View {
     @State private var selectedResponse: AssessmentBinaryResponse?
+    @State private var showQuestion = false
+    @State private var showOptions: [Bool] = Array(repeating: false, count: 2)
+    @State private var buttonScale: [CGFloat] = Array(repeating: 1.0, count: 2)
     @AppStorage("assessmentConcernedLovedOnes") private var concernRaw = AssessmentBinaryResponse.unanswered.rawValue
     var onComplete: () -> Void
     var onBack: (() -> Void)?
@@ -670,13 +772,29 @@ struct AssessmentQuestion7View: View {
                         .multilineTextAlignment(.leading)
                         .fixedSize(horizontal: false, vertical: true)
                         .padding(.top, 50)
+                        .opacity(showQuestion ? 1 : 0)
+                        .offset(y: showQuestion ? 0 : 20)
                     
                     VStack(spacing: 16) {
-                        ForEach([AssessmentBinaryResponse.yes, .no], id: \.self) { response in
+                        ForEach(Array([AssessmentBinaryResponse.yes, .no].enumerated()), id: \.element) { index, response in
                             Button(action: {
+                                withAnimation(.spring(response: 0.2, dampingFraction: 0.8)) {
+                                    buttonScale[index] = 0.97
+                                }
+                                
+                                let impactFeedback = UIImpactFeedbackGenerator(style: .light)
+                                impactFeedback.impactOccurred()
+                                
                                 selectedResponse = response
                                 concernRaw = response.rawValue
+                                
                                 DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
+                                    withAnimation(.spring(response: 0.2, dampingFraction: 0.8)) {
+                                        buttonScale[index] = 1.0
+                                    }
+                                }
+                                
+                                DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) {
                                     onComplete()
                                 }
                             }) {
@@ -696,6 +814,9 @@ struct AssessmentQuestion7View: View {
                                                 lineWidth: selectedResponse == response ? 2 : 1.5
                                             )
                                     )
+                                    .scaleEffect(buttonScale[index])
+                                    .opacity(showOptions[index] ? 1 : 0)
+                                    .offset(y: showOptions[index] ? 0 : 10)
                             }
                         }
                     }
@@ -705,11 +826,29 @@ struct AssessmentQuestion7View: View {
                 Spacer()
             }
         }
+        .onAppear {
+            // Animate question appearance
+            withAnimation(.spring(response: 0.5, dampingFraction: 0.8).delay(0.1)) {
+                showQuestion = true
+            }
+            
+            // Stagger option appearances
+            for index in 0..<2 {
+                withAnimation(.spring(response: 0.4, dampingFraction: 0.85).delay(Double(index) * 0.05 + 0.3)) {
+                    if index < showOptions.count {
+                        showOptions[index] = true
+                    }
+                }
+            }
+        }
     }
 }
 
 struct AssessmentQuestion8View: View {
     @State private var selectedResponse: AssessmentBinaryResponse?
+    @State private var showQuestion = false
+    @State private var showOptions: [Bool] = Array(repeating: false, count: 2)
+    @State private var buttonScale: [CGFloat] = Array(repeating: 1.0, count: 2)
     @AppStorage("assessmentFeelsGuilty") private var guiltRaw = AssessmentBinaryResponse.unanswered.rawValue
     var onComplete: () -> Void
     var onBack: (() -> Void)?
@@ -757,13 +896,29 @@ struct AssessmentQuestion8View: View {
                         .multilineTextAlignment(.leading)
                         .fixedSize(horizontal: false, vertical: true)
                         .padding(.top, 50)
+                        .opacity(showQuestion ? 1 : 0)
+                        .offset(y: showQuestion ? 0 : 20)
                     
                     VStack(spacing: 16) {
-                        ForEach([AssessmentBinaryResponse.yes, .no], id: \.self) { response in
+                        ForEach(Array([AssessmentBinaryResponse.yes, .no].enumerated()), id: \.element) { index, response in
                             Button(action: {
+                                withAnimation(.spring(response: 0.2, dampingFraction: 0.8)) {
+                                    buttonScale[index] = 0.97
+                                }
+                                
+                                let impactFeedback = UIImpactFeedbackGenerator(style: .light)
+                                impactFeedback.impactOccurred()
+                                
                                 selectedResponse = response
                                 guiltRaw = response.rawValue
+                                
                                 DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
+                                    withAnimation(.spring(response: 0.2, dampingFraction: 0.8)) {
+                                        buttonScale[index] = 1.0
+                                    }
+                                }
+                                
+                                DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) {
                                     onComplete()
                                 }
                             }) {
@@ -783,6 +938,9 @@ struct AssessmentQuestion8View: View {
                                                 lineWidth: selectedResponse == response ? 2 : 1.5
                                             )
                                     )
+                                    .scaleEffect(buttonScale[index])
+                                    .opacity(showOptions[index] ? 1 : 0)
+                                    .offset(y: showOptions[index] ? 0 : 10)
                             }
                         }
                     }
@@ -792,11 +950,29 @@ struct AssessmentQuestion8View: View {
                 Spacer()
             }
         }
+        .onAppear {
+            // Animate question appearance
+            withAnimation(.spring(response: 0.5, dampingFraction: 0.8).delay(0.1)) {
+                showQuestion = true
+            }
+            
+            // Stagger option appearances
+            for index in 0..<2 {
+                withAnimation(.spring(response: 0.4, dampingFraction: 0.85).delay(Double(index) * 0.05 + 0.3)) {
+                    if index < showOptions.count {
+                        showOptions[index] = true
+                    }
+                }
+            }
+        }
     }
 }
 
 struct AssessmentQuestion9View: View {
     @State private var selectedResponse: AssessmentBinaryResponse?
+    @State private var showQuestion = false
+    @State private var showOptions: [Bool] = Array(repeating: false, count: 2)
+    @State private var buttonScale: [CGFloat] = Array(repeating: 1.0, count: 2)
     @AppStorage("assessmentToleranceIncrease") private var toleranceRaw = AssessmentBinaryResponse.unanswered.rawValue
     var onComplete: () -> Void
     var onBack: (() -> Void)?
@@ -844,13 +1020,29 @@ struct AssessmentQuestion9View: View {
                         .multilineTextAlignment(.leading)
                         .fixedSize(horizontal: false, vertical: true)
                         .padding(.top, 50)
+                        .opacity(showQuestion ? 1 : 0)
+                        .offset(y: showQuestion ? 0 : 20)
                     
                     VStack(spacing: 16) {
-                        ForEach([AssessmentBinaryResponse.yes, .no], id: \.self) { response in
+                        ForEach(Array([AssessmentBinaryResponse.yes, .no].enumerated()), id: \.element) { index, response in
                             Button(action: {
+                                withAnimation(.spring(response: 0.2, dampingFraction: 0.8)) {
+                                    buttonScale[index] = 0.97
+                                }
+                                
+                                let impactFeedback = UIImpactFeedbackGenerator(style: .light)
+                                impactFeedback.impactOccurred()
+                                
                                 selectedResponse = response
                                 toleranceRaw = response.rawValue
+                                
                                 DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
+                                    withAnimation(.spring(response: 0.2, dampingFraction: 0.8)) {
+                                        buttonScale[index] = 1.0
+                                    }
+                                }
+                                
+                                DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) {
                                     onComplete()
                                 }
                             }) {
@@ -870,6 +1062,9 @@ struct AssessmentQuestion9View: View {
                                                 lineWidth: selectedResponse == response ? 2 : 1.5
                                             )
                                     )
+                                    .scaleEffect(buttonScale[index])
+                                    .opacity(showOptions[index] ? 1 : 0)
+                                    .offset(y: showOptions[index] ? 0 : 10)
                             }
                         }
                     }
@@ -879,11 +1074,27 @@ struct AssessmentQuestion9View: View {
                 Spacer()
             }
         }
+        .onAppear {
+            withAnimation(.spring(response: 0.5, dampingFraction: 0.8).delay(0.1)) {
+                showQuestion = true
+            }
+            
+            for index in 0..<2 {
+                withAnimation(.spring(response: 0.4, dampingFraction: 0.85).delay(Double(index) * 0.05 + 0.3)) {
+                    if index < showOptions.count {
+                        showOptions[index] = true
+                    }
+                }
+            }
+        }
     }
 }
 
 struct AssessmentQuestion10View: View {
     @State private var selectedLevel: AssessmentReadinessLevel?
+    @State private var showQuestion = false
+    @State private var showOptions: [Bool] = Array(repeating: false, count: 5)
+    @State private var buttonScale: [CGFloat] = Array(repeating: 1.0, count: 5)
     @AppStorage("assessmentQuitReadinessLevel") private var readinessRaw = ""
     var onComplete: () -> Void
     var onBack: (() -> Void)?
@@ -933,13 +1144,29 @@ struct AssessmentQuestion10View: View {
                         .multilineTextAlignment(.leading)
                         .fixedSize(horizontal: false, vertical: true)
                         .padding(.top, 50)
+                        .opacity(showQuestion ? 1 : 0)
+                        .offset(y: showQuestion ? 0 : 20)
                     
                     VStack(spacing: 16) {
-                        ForEach(options, id: \.self) { option in
+                        ForEach(Array(options.enumerated()), id: \.element) { index, option in
                             Button(action: {
+                                withAnimation(.spring(response: 0.2, dampingFraction: 0.8)) {
+                                    buttonScale[index] = 0.97
+                                }
+                                
+                                let impactFeedback = UIImpactFeedbackGenerator(style: .light)
+                                impactFeedback.impactOccurred()
+                                
                                 selectedLevel = option
                                 readinessRaw = option.rawValue
+                                
                                 DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
+                                    withAnimation(.spring(response: 0.2, dampingFraction: 0.8)) {
+                                        buttonScale[index] = 1.0
+                                    }
+                                }
+                                
+                                DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) {
                                     onComplete()
                                 }
                             }) {
@@ -961,6 +1188,9 @@ struct AssessmentQuestion10View: View {
                                             )
                                             .cornerRadius(35)
                                     )
+                                    .scaleEffect(buttonScale[index])
+                                    .opacity(showOptions[index] ? 1 : 0)
+                                    .offset(y: showOptions[index] ? 0 : 10)
                             }
                         }
                     }
@@ -970,11 +1200,27 @@ struct AssessmentQuestion10View: View {
                 Spacer()
             }
         }
+        .onAppear {
+            withAnimation(.spring(response: 0.5, dampingFraction: 0.8).delay(0.1)) {
+                showQuestion = true
+            }
+            
+            for index in 0..<options.count {
+                withAnimation(.spring(response: 0.4, dampingFraction: 0.85).delay(Double(index) * 0.05 + 0.3)) {
+                    if index < showOptions.count {
+                        showOptions[index] = true
+                    }
+                }
+            }
+        }
     }
 }
 
 struct AssessmentQuestion11View: View {
     @State private var selectedLevel: AssessmentConfidenceLevel?
+    @State private var showQuestion = false
+    @State private var showOptions: [Bool] = Array(repeating: false, count: 5)
+    @State private var buttonScale: [CGFloat] = Array(repeating: 1.0, count: 5)
     @AppStorage("assessmentQuitConfidenceLevel") private var confidenceRaw = ""
     var onComplete: () -> Void
     var onBack: (() -> Void)?
@@ -1024,13 +1270,29 @@ struct AssessmentQuestion11View: View {
                         .multilineTextAlignment(.leading)
                         .fixedSize(horizontal: false, vertical: true)
                         .padding(.top, 50)
+                        .opacity(showQuestion ? 1 : 0)
+                        .offset(y: showQuestion ? 0 : 20)
                     
                     VStack(spacing: 16) {
-                        ForEach(options, id: \.self) { option in
+                        ForEach(Array(options.enumerated()), id: \.element) { index, option in
                             Button(action: {
+                                withAnimation(.spring(response: 0.2, dampingFraction: 0.8)) {
+                                    buttonScale[index] = 0.97
+                                }
+                                
+                                let impactFeedback = UIImpactFeedbackGenerator(style: .light)
+                                impactFeedback.impactOccurred()
+                                
                                 selectedLevel = option
                                 confidenceRaw = option.rawValue
+                                
                                 DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
+                                    withAnimation(.spring(response: 0.2, dampingFraction: 0.8)) {
+                                        buttonScale[index] = 1.0
+                                    }
+                                }
+                                
+                                DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) {
                                     onComplete()
                                 }
                             }) {
@@ -1052,6 +1314,9 @@ struct AssessmentQuestion11View: View {
                                             )
                                             .cornerRadius(35)
                                     )
+                                    .scaleEffect(buttonScale[index])
+                                    .opacity(showOptions[index] ? 1 : 0)
+                                    .offset(y: showOptions[index] ? 0 : 10)
                             }
                         }
                     }
@@ -1061,11 +1326,29 @@ struct AssessmentQuestion11View: View {
                 Spacer()
             }
         }
+        .onAppear {
+            // Animate question appearance
+            withAnimation(.spring(response: 0.5, dampingFraction: 0.8).delay(0.1)) {
+                showQuestion = true
+            }
+            
+            // Stagger option appearances
+            for index in 0..<options.count {
+                withAnimation(.spring(response: 0.4, dampingFraction: 0.85).delay(Double(index) * 0.05 + 0.3)) {
+                    if index < showOptions.count {
+                        showOptions[index] = true
+                    }
+                }
+            }
+        }
     }
 }
 
 struct AssessmentQuestion12View: View {
     @State private var selectedArea: AssessmentMotivationArea?
+    @State private var showQuestion = false
+    @State private var showOptions: [Bool] = Array(repeating: false, count: 6)
+    @State private var buttonScale: [CGFloat] = Array(repeating: 1.0, count: 6)
     @AppStorage("assessmentMotivationArea") private var motivationAreaRaw = ""
     var onComplete: () -> Void
     var onBack: (() -> Void)?
@@ -1103,11 +1386,25 @@ struct AssessmentQuestion12View: View {
                         .padding(.top, 50)
                     
                     VStack(spacing: 16) {
-                        ForEach(options, id: \.self) { option in
+                        ForEach(Array(options.enumerated()), id: \.element) { index, option in
                             Button(action: {
+                                withAnimation(.spring(response: 0.2, dampingFraction: 0.8)) {
+                                    buttonScale[index] = 0.97
+                                }
+                                
+                                let impactFeedback = UIImpactFeedbackGenerator(style: .light)
+                                impactFeedback.impactOccurred()
+                                
                                 selectedArea = option
                                 motivationAreaRaw = option.rawValue
+                                
                                 DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
+                                    withAnimation(.spring(response: 0.2, dampingFraction: 0.8)) {
+                                        buttonScale[index] = 1.0
+                                    }
+                                }
+                                
+                                DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) {
                                     onComplete()
                                 }
                             }) {
@@ -1129,6 +1426,9 @@ struct AssessmentQuestion12View: View {
                                             )
                                             .cornerRadius(35)
                                     )
+                                    .scaleEffect(buttonScale[index])
+                                    .opacity(showOptions[index] ? 1 : 0)
+                                    .offset(y: showOptions[index] ? 0 : 10)
                             }
                         }
                     }
@@ -1137,6 +1437,19 @@ struct AssessmentQuestion12View: View {
                 
                 Spacer()
                 .padding(.bottom, 50)
+            }
+        }
+        .onAppear {
+            withAnimation(.spring(response: 0.5, dampingFraction: 0.8).delay(0.1)) {
+                showQuestion = true
+            }
+            
+            for index in 0..<options.count {
+                withAnimation(.spring(response: 0.4, dampingFraction: 0.85).delay(Double(index) * 0.05 + 0.3)) {
+                    if index < showOptions.count {
+                        showOptions[index] = true
+                    }
+                }
             }
         }
     }

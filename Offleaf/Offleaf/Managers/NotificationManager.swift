@@ -432,7 +432,18 @@ class NotificationManager: NSObject, ObservableObject {
         guard let quitDateString = UserDefaults.standard.string(forKey: "quitDate"),
               let quitDate = ISO8601DateFormatter().date(from: quitDateString) else { return }
         
-        let daysSinceQuit = Calendar.current.dateComponents([.day], from: quitDate, to: Date()).day ?? 0
+        // Match HomeView's daysSinceQuit calculation (1-based counting)
+        let calendar = Calendar.current
+        let startOfQuitDate = calendar.startOfDay(for: quitDate)
+        let startOfToday = calendar.startOfDay(for: Date())
+        
+        let daysSinceQuit: Int
+        if startOfQuitDate > startOfToday {
+            daysSinceQuit = 0
+        } else {
+            let days = calendar.dateComponents([.day], from: startOfQuitDate, to: startOfToday).day ?? 0
+            daysSinceQuit = max(1, days + 1)
+        }
         
         // Update last scheduled milestone if needed
         if daysSinceQuit > lastScheduledMilestone {
@@ -450,6 +461,80 @@ class NotificationManager: NSObject, ObservableObject {
         let cravingIdentifiers = (0..<3).map { "craving-support-\($0)" }
         UNUserNotificationCenter.current().removePendingNotificationRequests(withIdentifiers: milestoneIdentifiers + motivationIdentifiers + cravingIdentifiers)
         await scheduleInitialNotifications(clearExisting: false)
+    }
+    
+    func refreshScheduledNotifications() {
+        UNUserNotificationCenter.current().getPendingNotificationRequests { requests in
+            let hasCheckIn = requests.contains { $0.identifier == "daily-checkin" }
+            if !hasCheckIn && self.dailyCheckInEnabled {
+                self.scheduleDailyCheckIn()
+            }
+        }
+    }
+    
+    func scheduleAllNotifications() {
+        if dailyCheckInEnabled {
+            scheduleDailyCheckIn()
+        }
+        
+        if motivationalQuotesEnabled {
+            Task {
+                await scheduleMotivationalQuotes()
+            }
+        }
+        
+        if milestoneRemindersEnabled {
+            Task {
+                await scheduleMilestoneNotifications()
+            }
+        }
+        
+        if cravingTipsEnabled {
+            scheduleCravingSupport()
+        }
+    }
+    
+    func scheduleCheckInReminderIfNeeded() {
+        guard dailyCheckInEnabled else { return }
+        
+        let calendar = Calendar.current
+        let now = Date()
+        let components = checkInTimeString.split(separator: ":")
+        
+        guard components.count == 2,
+              let hour = Int(components[0]),
+              let minute = Int(components[1]) else { return }
+        
+        var dateComponents = calendar.dateComponents([.year, .month, .day], from: now)
+        dateComponents.hour = hour
+        dateComponents.minute = minute
+        
+        guard let checkInTime = calendar.date(from: dateComponents) else { return }
+        
+        if checkInTime > now {
+            let content = UNMutableNotificationContent()
+            content.title = "Time for Your Check-In"
+            content.body = "Let's see how you're doing today!"
+            content.sound = .default
+            content.categoryIdentifier = "DAILY_CHECKIN"
+            
+            let trigger = UNTimeIntervalNotificationTrigger(
+                timeInterval: checkInTime.timeIntervalSince(now),
+                repeats: false
+            )
+            
+            let request = UNNotificationRequest(
+                identifier: "daily-checkin-reminder",
+                content: content,
+                trigger: trigger
+            )
+            
+            UNUserNotificationCenter.current().add(request) { error in
+                if let error = error {
+                    print("Error scheduling check-in reminder: \(error)")
+                }
+            }
+        }
     }
 
     private func addNotificationRequest(_ request: UNNotificationRequest) async throws {

@@ -20,6 +20,10 @@ class StoreKitManager: ObservableObject {
         case monthly = "com.offleaf.premium.monthly"
         case annual = "com.offleaf.premium.annual"
         case lifetime = "com.offleaf.premium.lifetime.unlock"
+        // Promotional pricing products
+        case promoMonthly = "com.offleaf.promo.monthly"
+        case promoAnnual = "com.offleaf.promo.annual"
+        case specialAnnual = "com.offleaf.special.annual"
     }
 
     private var productIDs: [String] {
@@ -48,7 +52,23 @@ class StoreKitManager: ObservableObject {
                 do {
                     try await self.process(transactionResult: result)
                 } catch {
-                    print("Transaction failed verification: \(error)")
+                    // Critical: Transaction verification failed - this could mean fraudulent purchase
+                    print("[StoreKit] CRITICAL: Transaction verification failed: \(error)")
+                    
+                    // Log to analytics for investigation
+                    #if !DEBUG
+                    // In production, track this critical error
+                    // Analytics.track("transaction_verification_failed", properties: ["error": error.localizedDescription])
+                    #endif
+                    
+                    // Notify user if appropriate
+                    await MainActor.run {
+                        NotificationCenter.default.post(
+                            name: Notification.Name("TransactionVerificationFailed"),
+                            object: nil,
+                            userInfo: ["error": error]
+                        )
+                    }
                 }
             }
         }
@@ -65,8 +85,30 @@ class StoreKitManager: ObservableObject {
     func loadProducts() async {
         do {
             subscriptions = try await Product.products(for: productIDs)
+            print("[StoreKit] Successfully loaded \(subscriptions.count) products:")
+            for product in subscriptions {
+                print("[StoreKit] - \(product.id): \(product.displayName) - \(product.displayPrice)")
+            }
         } catch {
-            print("Failed to load products: \(error)")
+            print("[StoreKit] ERROR: Failed to load products: \(error.localizedDescription)")
+            
+            // Retry logic for transient failures
+            if (error as NSError).code == 0 { // Network error
+                // Schedule retry
+                Task {
+                    try? await Task.sleep(nanoseconds: 3_000_000_000) // 3 seconds
+                    await loadProducts() // Retry once
+                }
+            }
+            
+            // Keep UI responsive even if products fail to load
+            await MainActor.run {
+                // Could show cached product info or fallback UI
+                NotificationCenter.default.post(
+                    name: Notification.Name("ProductsLoadFailed"),
+                    object: nil
+                )
+            }
         }
     }
     
@@ -89,23 +131,15 @@ class StoreKitManager: ObservableObject {
     }
     
     func checkVerified<T>(_ result: VerificationResult<T>) throws -> T {
-#if DEBUG
-        switch result {
-        case .unverified(let value, let error):
-            print("Warning: unverified StoreKit result: \(error)")
-            return value
-        case .verified(let safe):
-            return safe
-        }
-#else
         switch result {
         case .unverified(_, let error):
-            print("StoreKit verification failed: \(error)")
+            #if DEBUG
+            print("Warning: StoreKit verification failed in DEBUG: \(error)")
+            #endif
             throw StoreError.failedVerification
         case .verified(let safe):
             return safe
         }
-#endif
     }
     
     @MainActor
@@ -122,7 +156,15 @@ class StoreKitManager: ObservableObject {
                     }
                 }
             } catch {
-                print("Failed to verify transaction: \(error)")
+                // Extract product ID from the unverified transaction if possible
+                let productID: String = {
+                    switch result {
+                    case .verified(let transaction), .unverified(let transaction, _):
+                        return transaction.productID
+                    }
+                }()
+                print("[StoreKit] ERROR: Failed to verify transaction for product \(productID): \(error)")
+                // Continue checking other transactions rather than failing completely
             }
         }
         
@@ -136,7 +178,8 @@ class StoreKitManager: ObservableObject {
                     }
                 }
             } catch {
-                print("Failed to verify transaction for \(product.id): \(error)")
+                print("[StoreKit] ERROR: Failed to verify lifetime purchase for \(product.id): \(error)")
+                // Don't fail the entire status update for one product
             }
         }
         
@@ -158,7 +201,8 @@ class StoreKitManager: ObservableObject {
                     }
                 }
             } catch {
-                print("Failed to fetch status for \(product.id): \(error)")
+                print("[StoreKit] WARNING: Failed to fetch subscription status for \(product.id): \(error)")
+                // Continue with other subscriptions
             }
         }
 

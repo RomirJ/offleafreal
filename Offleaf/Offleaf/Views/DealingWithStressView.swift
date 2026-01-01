@@ -28,7 +28,7 @@ struct DealingWithStressView: View {
                     
                     Spacer().frame(width: 16)
                     
-                    LeafLogoView(size: 40)
+                    LeafLogoView(size: 56)
                     
                     Text("Learn")
                         .font(.system(size: 20, weight: .semibold))
@@ -133,7 +133,7 @@ struct DealingWithStressView: View {
                 }
             }
         }
-        .navigationBarHidden(true)
+        .toolbar(.hidden, for: .navigationBar)
         .sheet(isPresented: $showingTriggerExercise) {
             TriggerExerciseView()
         }
@@ -446,15 +446,21 @@ struct TriggerExerciseView: View {
     }
     
     func loadSavedTriggers() {
-        if let data = UserDefaults.standard.array(forKey: "userTriggerPlans") as? [[String: String]] {
+        // Load from secure storage first
+        if let data = SecureHealthDataStore.shared.loadSecureData([[String: String]].self, for: "userTriggerPlans") {
             savedTriggers = data
+        } else if let data = UserDefaults.standard.array(forKey: "userTriggerPlans") as? [[String: String]] {
+            // Migrate from UserDefaults if exists
+            savedTriggers = data
+            _ = SecureHealthDataStore.shared.saveSecureData(data, for: "userTriggerPlans")
+            UserDefaults.standard.removeObject(forKey: "userTriggerPlans")
         }
     }
     
     func saveTriggers() {
-        // Save to UserDefaults
+        // Save to secure storage for sensitive health data
         let triggerData = triggers.map { ["trigger": $0.trigger, "action": $0.healthyAction] }
-        UserDefaults.standard.set(triggerData, forKey: "userTriggerPlans")
+        _ = SecureHealthDataStore.shared.saveSecureData(triggerData, for: "userTriggerPlans")
         
         // Update local state
         savedTriggers = triggerData

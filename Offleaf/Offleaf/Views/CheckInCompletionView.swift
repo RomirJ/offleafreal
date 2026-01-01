@@ -9,10 +9,10 @@ import SwiftUI
 import UIKit
 
 struct CheckInCompletionView: View {
+    @StateObject private var streakManager = StreakManager.shared
     @Environment(\.dismiss) var dismiss
     @State private var showConfetti = false
     @AppStorage("userName") private var userName = ""
-    @AppStorage("checkInStreak") private var checkInStreak = 0
     @State private var isEditingName = false
     @State private var draftName = ""
     var onDismiss: (() -> Void)? = nil
@@ -23,13 +23,13 @@ struct CheckInCompletionView: View {
     }
 
     private var streakMessage: String {
-        switch checkInStreak {
+        switch streakManager.currentStreak {
         case ..<1:
             return "You've completed your first check-in!"
         case 1:
             return "You've checked in today. Keep it going!"
         default:
-            return "You've checked in for \(checkInStreak) days straight"
+            return "You've checked in for \(streakManager.currentStreak) days straight"
         }
     }
     
@@ -44,7 +44,13 @@ struct CheckInCompletionView: View {
                 HStack {
                     Spacer()
                     
-                    Button(action: { dismiss() }) {
+                    Button(action: { 
+                        if let onDismiss = onDismiss {
+                            onDismiss()
+                        } else {
+                            dismiss()
+                        }
+                    }) {
                         ZStack {
                             Circle()
                                 .fill(Color.white.opacity(0.1))
@@ -115,7 +121,7 @@ struct CheckInCompletionView: View {
                     .allowsHitTesting(false)
             }
         }
-        .navigationBarHidden(true)
+        .toolbar(.hidden, for: .navigationBar)
         .sheet(isPresented: $isEditingName) {
             NameEntrySheet(name: $draftName) { newName in
                 let trimmed = newName.trimmingCharacters(in: .whitespacesAndNewlines)

@@ -27,7 +27,10 @@ struct OnboardingScreenView: View {
                 
                 // Logo and title
                 VStack(spacing: 30) {
-                    LeafLogoView(size: 140)
+                    Image("LeafLogo")
+                        .resizable()
+                        .aspectRatio(contentMode: .fit)
+                        .frame(width: 180, height: 180)
                         .opacity(showContent ? 1 : 0)
                         .scaleEffect(showContent ? 1 : 0.8)
                         .animation(.spring(response: 0.6, dampingFraction: 0.8).delay(0.1), value: showContent)

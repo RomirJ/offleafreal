@@ -265,7 +265,7 @@ struct TipsView: View {
                 }
             }
         }
-        .navigationBarHidden(true)
+        .toolbar(.hidden, for: .navigationBar)
         .onAppear {
             withAnimation(.easeOut(duration: 0.5)) {
                 animateGradient = true
@@ -435,46 +435,48 @@ struct TipsBackgroundView: View {
     @Binding var animating: Bool
     
     var body: some View {
-        ZStack {
-            // Golden wisdom orb
-            Circle()
-                .fill(
-                    RadialGradient(
-                        colors: [
-                            Color(red: 0.9, green: 0.7, blue: 0.3).opacity(0.3),
-                            Color(red: 0.8, green: 0.6, blue: 0.2).opacity(0.2),
-                            Color(red: 0.7, green: 0.5, blue: 0.1).opacity(0.1),
-                            Color.clear
-                        ],
-                        center: .center,
-                        startRadius: 30,
-                        endRadius: 200
+        GeometryReader { geometry in
+            ZStack {
+                // Golden wisdom orb
+                Circle()
+                    .fill(
+                        RadialGradient(
+                            colors: [
+                                Color(red: 0.9, green: 0.7, blue: 0.3).opacity(0.3),
+                                Color(red: 0.8, green: 0.6, blue: 0.2).opacity(0.2),
+                                Color(red: 0.7, green: 0.5, blue: 0.1).opacity(0.1),
+                                Color.clear
+                            ],
+                            center: .center,
+                            startRadius: 30,
+                            endRadius: 200
+                        )
                     )
-                )
-                .frame(width: 400, height: 400)
-                .blur(radius: 30)
-                .position(x: UIScreen.main.bounds.width - 100, y: 200)
-                .rotationEffect(.degrees(animating ? 360 : 0))
-                .animation(.linear(duration: 90).repeatForever(autoreverses: false), value: animating)
-            
-            // Green healing orb
-            Circle()
-                .fill(
-                    RadialGradient(
-                        colors: [
-                            Color(red: 0.3, green: 0.7, blue: 0.4).opacity(0.25),
-                            Color.clear
-                        ],
-                        center: .center,
-                        startRadius: 20,
-                        endRadius: 120
+                    .frame(width: min(400, geometry.size.width * 0.8), height: min(400, geometry.size.width * 0.8))
+                    .blur(radius: 30)
+                    .position(x: geometry.size.width * 0.85, y: geometry.size.height * 0.25)
+                    .rotationEffect(.degrees(animating ? 360 : 0))
+                    .animation(.linear(duration: 90).repeatForever(autoreverses: false), value: animating)
+                
+                // Green healing orb
+                Circle()
+                    .fill(
+                        RadialGradient(
+                            colors: [
+                                Color(red: 0.3, green: 0.7, blue: 0.4).opacity(0.25),
+                                Color.clear
+                            ],
+                            center: .center,
+                            startRadius: 20,
+                            endRadius: 120
+                        )
                     )
-                )
-                .frame(width: 250, height: 250)
-                .blur(radius: 25)
-                .position(x: 80, y: UIScreen.main.bounds.height - 200)
-                .scaleEffect(animating ? 1.3 : 0.7)
-                .animation(.easeInOut(duration: 5).repeatForever(autoreverses: true), value: animating)
+                    .frame(width: min(250, geometry.size.width * 0.6), height: min(250, geometry.size.width * 0.6))
+                    .blur(radius: 25)
+                    .position(x: geometry.size.width * 0.15, y: geometry.size.height * 0.75)
+                    .scaleEffect(animating ? 1.3 : 0.7)
+                    .animation(.easeInOut(duration: 5).repeatForever(autoreverses: true), value: animating)
+            }
         }
     }
 }
